@@ -1,6 +1,8 @@
+import matplotlib.pyplot as plt
+from math import sqrt
 import random
 
-def distance(x1, y1, x2, y2):
+def sqdistance(x1, y1, x2, y2):
     a = x1 - x2
     b = y1 - y2
     return a**2 + b**2
@@ -20,8 +22,8 @@ class Circle(object):
         xLow, xHigh = xPair
         yLow, yHigh = yPair
 
-        circlePoints = [(self.x, self.y), (self.x - r, self.y), (self.x + r, self.y),
-                        (self.x, self.y - r), (self.x, self.y + r)]
+        circlePoints = [(self.x, self.y), (self.x - self.r, self.y), (self.x + self.r, self.y),
+                        (self.x, self.y - self.r), (self.x, self.y + self.r)]
 
         for x, y in circlePoints:
             if xLow <= x <= xHigh and yLow <= y <= yHigh: return True
@@ -35,6 +37,21 @@ class Circle(object):
 
         return False
 
+    def get_plot_points(self):
+        spacing = ((self.x + self.r)-(self.x - self.r))/(1000-1)
+        xpoints = [self.x - self.r + i * spacing for i in range(1000)]
+
+
+        def yfunc(x):
+            try:
+                var = sqrt(self.r**2 - (x - self.x)**2)
+            except:
+                var = 0
+            return [self.y + var, self.y - var]
+
+        ypoints = sum([yfunc(x) for x in xpoints], [])
+        xpoints = sum([[x,x] for x in xpoints], [])
+        return xpoints, ypoints
 
 
 
@@ -53,13 +70,20 @@ class World(object):
     def populate(self, amountCircle):
         self.circles = [self.make_circle() for i in range(amountCircle)]
 
+    def plot_world(self):
+        for c in self.circles:
+            xpoints, ypoints = c.get_plot_points()
+            plt.scatter(xpoints, ypoints)
+        plt.show()
+
+
     def find_collisions(self, circles, collisions = {}):
         # circles is a list of indices from self.circles
         # collisions is a dictionary that maps index pairs (i,j) to booleans
 
         for i in circles:
             for j in circles:
-                if i > j or ((i,j) in collisions): continue
+                if i >= j or ((i,j) in collisions): continue
                 c = self.circles[i]
                 otherCircle = self.circles[j]
                 collisions[(i,j)] = c.check_collision(otherCircle)
@@ -88,6 +112,3 @@ class World(object):
             collisions = self.find_collisions(circleList, collisions=collisions)
 
         return [k for k, v in collisions.items() if v]
-
-
-        if (x)
