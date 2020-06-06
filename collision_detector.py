@@ -1,5 +1,6 @@
+from math import cos, sin, pi
 import matplotlib.pyplot as plt
-from math import sqrt
+from math import sqrt, ceil
 import random
 
 def sqdistance(x1, y1, x2, y2):
@@ -8,11 +9,15 @@ def sqdistance(x1, y1, x2, y2):
     return a**2 + b**2
 
 class Circle(object):
-    def __init__(self,x,y,r):
+    def __init__(self,x,y,r,d=0,speed=0):
         self.y = y
         self.x = x
         self.r = r
-
+        if speed < 0:
+            d = d + pi
+            speed = -speed
+        self.d = d + 2 * pi * ceil(-d/(2*pi))
+        self.speed = speed
     def check_collision(self,otherCircle):
         c = self.r + otherCircle.r
         return sqdistance(self.x, self.y, otherCircle.x, otherCircle.y) <= c**2
@@ -53,6 +58,60 @@ class Circle(object):
         xpoints = sum([[x,x] for x in xpoints], [])
         return xpoints, ypoints
 
+    def get_even_plot_points(self, numPoints = 1000):
+##        spacing = ((self.x + self.r)-(self.x - self.r))/(1000-1)
+##        xpoints = [self.x - self.r + i * spacing for i in range(1000)]
+
+        spacing = (2 * pi/(numPoints-1))   # 360 degrees is 2 * pi radians
+        thetapoints = [0 + i * spacing for i in range(numPoints)]
+
+        # Way 0
+
+        xpoints = [(cos(theta) * self.r) + self.x for theta in thetapoints]
+        ypoints = [(sin(theta) * self.r) + self.y for theta in thetapoints]
+
+##        # Way 1
+##
+##        def xyfunc(theta):
+##                x = (cos(theta) * self.r) + self.x
+##                y = (sin(theta) * self.r) + self.y
+##            return [x,y]
+##
+##        xypoints = [xyfunc(theta) for theta in thetapoints]
+##
+##
+##
+##        # One way
+##
+##        xpoints = []
+##        ypoints = []
+##        for a in xypoints:
+##            xpoints.append(a[0])
+##            ypoints.append(a[1])
+##
+##
+##        # Other way
+##        
+##        ypoints = [a[1] for a in xypoints]
+##        xpoints = [a[0] for a in xypoints]
+##
+##
+##        # Shortest code way
+##        xpoints, ypoints = zip(*xypoints)
+
+        return xpoints, ypoints
+
+
+
+
+def zip(*lists):
+
+    zippedlist = []
+    for i in range(lists[0]):
+        t = []
+        for list in lists:
+            t.append(list[i])
+        zippedlist.append(t)
 
 
 class World(object):
@@ -72,7 +131,7 @@ class World(object):
 
     def plot_world(self):
         for c in self.circles:
-            xpoints, ypoints = c.get_plot_points()
+            xpoints, ypoints = c.get_even_plot_points(numPoints=10)
             plt.scatter(xpoints, ypoints)
         plt.show()
 
