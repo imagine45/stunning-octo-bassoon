@@ -18,6 +18,11 @@ class Circle(object):
             speed = -speed
         self.d = d + 2 * pi * ceil(-d/(2*pi))
         self.speed = speed
+
+    def update_position(self, t=0.1):
+        self.x = self.x + t * self.speed * cos(self.d)
+        self.y = self.y + t * self.speed * sin(self.d)
+
     def check_collision(self,otherCircle):
         c = self.r + otherCircle.r
         return sqdistance(self.x, self.y, otherCircle.x, otherCircle.y) <= c**2
@@ -91,7 +96,7 @@ class Circle(object):
 ##
 ##
 ##        # Other way
-##        
+##
 ##        ypoints = [a[1] for a in xypoints]
 ##        xpoints = [a[0] for a in xypoints]
 ##
@@ -104,14 +109,14 @@ class Circle(object):
 
 
 
-def zip(*lists):
-
-    zippedlist = []
-    for i in range(lists[0]):
-        t = []
-        for list in lists:
-            t.append(list[i])
-        zippedlist.append(t)
+# def zip(*lists):
+#
+#     zippedlist = []
+#     for i in range(lists[0]):
+#         t = []
+#         for list in lists:
+#             t.append(list[i])
+#         zippedlist.append(t)
 
 
 class World(object):
@@ -119,20 +124,65 @@ class World(object):
         self.l = l
         self.w = w
 
-    def make_circle(self):
+    def make_circle(self, moving=False):
         x = random.uniform(0, self.l)
         y = random.uniform(0, self.w)
         maxr = min((self.l - x), (self.w - y), y, x)
         r = random.uniform(0, maxr)
-        return Circle(x,y,r)
 
-    def populate(self, amountCircle):
-        self.circles = [self.make_circle() for i in range(amountCircle)]
+        if moving:
+            speed = random.uniform(0, sqrt(self.l**2 + self.w**2))
+            direction = random.uniform(0, 2*pi)
+        else:
+            speed = 0
+            direction = 0
+
+        return Circle(x,y,r, speed=speed, d=direction)
+
+    def populate(self, amountCircle, moving=False):
+
+        # TODO: Make circles in a way that guarantees they dont start off overlapping
+
+        self.circles = [self.make_circle(moving=moving) for i in range(amountCircle)]
+
+    def update_world(self, t=0.1):
+        for circle in self.circles:
+            circle.update_position(t=t)
 
     def plot_world(self):
         for c in self.circles:
             xpoints, ypoints = c.get_even_plot_points(numPoints=10)
             plt.scatter(xpoints, ypoints)
+
+    def simulate_world(self, time_step=0.1, total_simulation_time=50):
+
+        # TODO: Update this to actually animate and not just add more points
+        # TODO: Update this to do collisions more physically, not just reverse
+        # directions
+
+        self.plot_world()
+        plt.pause(time_step)
+        while total_simulation_time > 0:
+            self.update_world(t = time_step)
+            self.plot_world()
+            plt.pause(time_step)
+            total_simulation_time = total_simulation_time - time_step
+            collisions = self.find_all_collisions()
+            flipped = [False for i in range(len(self.circles))]
+            for i, j in collisions:
+                flipped[i] = True
+                flipped[j] = True
+            for i in flipped:
+                circle = self.circles[i]
+                distance_to_wall = min((self.l - circle.x),
+                                       (self.w - circle.y),
+                                       circle.y,
+                                       circle.x)
+                if circle.r > distance_to_wall or flipped[i]:
+                    circle.d = circle.d - pi
+                    if circle.d < 0:
+                        circle.d = circle.d + 2*pi
+
         plt.show()
 
 
