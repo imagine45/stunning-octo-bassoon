@@ -2,6 +2,8 @@ from math import cos, sin, pi
 import matplotlib.pyplot as plt
 from math import sqrt, ceil
 import random
+import matplotlib.animation as animation
+
 
 def sqdistance(x1, y1, x2, y2):
     a = x1 - x2
@@ -125,9 +127,18 @@ class World(object):
         self.w = w
 
     def make_circle(self, moving=False):
-        x = random.uniform(0, self.l)
-        y = random.uniform(0, self.w)
-        maxr = min((self.l - x), (self.w - y), y, x)
+        maxr = -1
+        while maxr < 0:
+            x = random.uniform(0, self.l)
+            y = random.uniform(0, self.w)
+            maxr = min((self.l - x), (self.w - y), y, x)
+
+            for circle in self.circles:
+                d = sqrt(sqdistance(x, y, circle.x, circle.y))
+                maxr = min(maxr, d - circle.r)
+                if maxr < 0:
+                    break
+
         r = random.uniform(0, maxr)
 
         if moving:
@@ -140,49 +151,66 @@ class World(object):
         return Circle(x,y,r, speed=speed, d=direction)
 
     def populate(self, amountCircle, moving=False):
-
-        # TODO: Make circles in a way that guarantees they dont start off overlapping
-
-        self.circles = [self.make_circle(moving=moving) for i in range(amountCircle)]
+        self.circles = []
+        # self.circles = [self.make_circle(moving=moving) for i in range(amountCircle)]
+        for i in range(amountCircle):
+            newCircle = self.make_circle(moving=moving)
+            self.circles.append(newCircle)
 
     def update_world(self, t=0.1):
-        for circle in self.circles:
+        for i, circle in enumerate(self.circles):
             circle.update_position(t=t)
 
+        collisions = self.find_all_collisions()
+        flipped = [False for i in range(len(self.circles))]
+        for i, j in collisions:
+            flipped[i] = True
+            flipped[j] = True
+        for i in flipped:
+            circle = self.circles[i]
+            distance_to_wall = min((self.l - circle.x),
+                                   (self.w - circle.y),
+                                   circle.y,
+                                   circle.x)
+            if circle.r > distance_to_wall or flipped[i]:
+                circle.d = circle.d - pi
+                if circle.d < 0:
+                    circle.d = circle.d + 2*pi
+
     def plot_world(self):
+        all_x_points = []
+        all_y_points = []
         for c in self.circles:
             xpoints, ypoints = c.get_even_plot_points(numPoints=10)
-            plt.scatter(xpoints, ypoints)
+            all_x_points += xpoints
+            all_y_points += ypoints
+
+        self.plotted_world = plt.scatter(all_x_points, all_y_points)
 
     def simulate_world(self, time_step=0.1, total_simulation_time=50):
 
-        # TODO: Update this to actually animate and not just add more points
         # TODO: Update this to do collisions more physically, not just reverse
         # directions
-
+        fig1 = plt.figure()
         self.plot_world()
-        plt.pause(time_step)
-        while total_simulation_time > 0:
-            self.update_world(t = time_step)
-            self.plot_world()
-            plt.pause(time_step)
-            total_simulation_time = total_simulation_time - time_step
-            collisions = self.find_all_collisions()
-            flipped = [False for i in range(len(self.circles))]
-            for i, j in collisions:
-                flipped[i] = True
-                flipped[j] = True
-            for i in flipped:
-                circle = self.circles[i]
-                distance_to_wall = min((self.l - circle.x),
-                                       (self.w - circle.y),
-                                       circle.y,
-                                       circle.x)
-                if circle.r > distance_to_wall or flipped[i]:
-                    circle.d = circle.d - pi
-                    if circle.d < 0:
-                        circle.d = circle.d + 2*pi
+        plt.xlim(0, self.l)
+        plt.ylim(0, self.w)
 
+        def update_plot(num):
+            self.update_world()
+            all_x_points = []
+            all_y_points = []
+            for c in self.circles:
+                xpoints, ypoints = c.get_even_plot_points(numPoints=10)
+                all_x_points += xpoints
+                all_y_points += ypoints
+
+            self.plotted_world.set_offsets(list(zip(all_x_points, all_y_points)))
+            return self.plotted_world,
+
+        line_ani = animation.FuncAnimation(fig1, update_plot,
+                                           ceil(total_simulation_time/time_step),
+                                           interval=0.5, blit=True)
         plt.show()
 
 
