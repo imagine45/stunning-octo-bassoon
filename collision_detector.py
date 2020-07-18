@@ -177,42 +177,32 @@ class World(object):
                 if circle.d < 0:
                     circle.d = circle.d + 2*pi
 
-    def plot_world(self):
-        all_x_points = []
-        all_y_points = []
-        for c in self.circles:
-            xpoints, ypoints = c.get_even_plot_points(numPoints=10)
-            all_x_points += xpoints
-            all_y_points += ypoints
-
-        self.plotted_world = plt.scatter(all_x_points, all_y_points)
-
-    def simulate_world(self, time_step=0.1, total_simulation_time=50):
+   def plot(self, simulate=None, time_step=1e-3):
 
         # TODO: Update this to do collisions more physically, not just reverse
         # directions
-        fig1 = plt.figure()
-        self.plot_world()
-        plt.xlim(0, self.l)
-        plt.ylim(0, self.w)
 
-        def update_plot(num):
-            self.update_world()
-            all_x_points = []
-            all_y_points = []
-            for c in self.circles:
-                xpoints, ypoints = c.get_even_plot_points(numPoints=10)
-                all_x_points += xpoints
-                all_y_points += ypoints
+        fig, ax = plt.subplots()
+        ax.set_xlim(0, self.l)
+        ax.set_ylim(0, self.w)
+        time = 0
 
-            self.plotted_world.set_offsets(list(zip(all_x_points, all_y_points)))
-            return self.plotted_world,
+        pltPnts = [ax.scatter(*circle.get_even_plot_points()) for circle in self.circles]
 
-        line_ani = animation.FuncAnimation(fig1, update_plot,
-                                           ceil(total_simulation_time/time_step),
-                                           interval=0.5, blit=True)
-        plt.show()
+        if simulate is None:
+            plt.show()
+            return
 
+        def update(stepnum):
+            for circle, pltPnt in zip(self.circles, pltPnts):
+                self.update_world(t=time_step)
+                xp, yp = circle.get_even_plot_points()
+                pltPnt.set_offsets(list(zip(xp,yp)))
+            return pltPnts
+
+        anim = animation.FuncAnimation(fig, update, frames=ceil(simulate/time_step),
+                                       interval=5, blit=False, repeat=False)
+        return anim
 
     def find_collisions(self, circles, collisions = {}):
         # circles is a list of indices from self.circles
