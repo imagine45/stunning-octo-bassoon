@@ -1,6 +1,6 @@
 from math import cos, sin, pi
 import matplotlib.pyplot as plt
-from math import sqrt, ceil
+from math import sqrt, ceil, atan2
 import random
 import matplotlib.animation as animation
 
@@ -15,15 +15,11 @@ class Circle(object):
         self.y = y
         self.x = x
         self.r = r
-        if speed < 0:
-            d = d + pi
-            speed = -speed
-        self.d = d + 2 * pi * ceil(-d/(2*pi))
-        self.speed = speed
+        self.vx, self.vy = polar_to_cart(speed, d)
 
     def update_position(self, t=0.1):
-        self.x = self.x + t * self.speed * cos(self.d)
-        self.y = self.y + t * self.speed * sin(self.d)
+        self.x = self.x + t * self.vx
+        self.y = self.y + t * self.vy
 
     def check_collision(self,otherCircle):
         c = self.r + otherCircle.r
@@ -119,6 +115,46 @@ class Circle(object):
 #         for list in lists:
 #             t.append(list[i])
 #         zippedlist.append(t)
+def cart_to_polar(vx, vy):
+    s = sqrt(vx**2 + vy**2)
+    d = atan2(vy, vx)
+    return (s, d)
+
+def polar_to_cart(s, d):
+    vx = s * cos(d)
+    vy = s * sin(d)
+    return (vx, vy)
+
+def circle_collision(c1, c2):
+    #Figure out x difference and y difference between their centers
+
+    #Figure out the angle for the line between their centers (using x difference and y difference)
+
+    xdifference = c1.x - c2.x
+    ydifference = c1.y - c2.y
+
+    angle_to_rotate = atan2(ydifference, xdifference)
+
+    c1_s, c1_d = cart_to_polar(c1.vx, c1.vy)
+    c2_s, c2_d = cart_to_polar(c2.vx, c2.vy)
+
+    c1_d = c1_d - angle_to_rotate
+    c2_d = c2_d - angle_to_rotate
+
+    c1_vx, c1_vy = polar_to_cart(c1_s, c1_d)
+    c2_vx, c2_vy = polar_to_cart(c2_s, c2_d)
+
+    c1_vx = - c1_vx
+    c2_vx = - c2_vx
+
+    c1_s, c1_d = cart_to_polar(c1_vx, c1_vy)
+    c2_s, c2_d = cart_to_polar(c2_vx, c2_vy)
+
+    c1_d = c1_d + angle_to_rotate
+    c2_d = c2_d + angle_to_rotate
+
+    c1.vx, c1.vy = polar_to_cart(c1_s, c1_d)
+    c2.vx, c2.vy = polar_to_cart(c2_s, c2_d)
 
 
 class World(object):
@@ -162,22 +198,17 @@ class World(object):
             circle.update_position(t=t)
 
         collisions = self.find_all_collisions()
-        flipped = [False for i in range(len(self.circles))]
         for i, j in collisions:
-            flipped[i] = True
-            flipped[j] = True
-        for i in flipped:
-            circle = self.circles[i]
-            distance_to_wall = min((self.l - circle.x),
-                                   (self.w - circle.y),
-                                   circle.y,
-                                   circle.x)
-            if circle.r > distance_to_wall or flipped[i]:
-                circle.d = circle.d - pi
-                if circle.d < 0:
-                    circle.d = circle.d + 2*pi
+            circle_collision(self.circles[i], self.circles[j])
+        for circle in self.circles:
+            if ((circle.x < circle.r and circle.vx < 0) or
+                (circle.r + circle.x > self.l and circle.vx > 0)):
+                circle.vx = -circle.vx
+            if ((circle.y < circle.r and circle.vy < 0) or
+                (circle.r + circle.y > self.w and circle.vy > 0)):
+                circle.vy = -circle.vy
 
-   def plot(self, simulate=None, time_step=1e-3):
+    def plot(self, simulate=None, time_step=1e-3):
 
         # TODO: Update this to do collisions more physically, not just reverse
         # directions
@@ -185,7 +216,6 @@ class World(object):
         fig, ax = plt.subplots()
         ax.set_xlim(0, self.l)
         ax.set_ylim(0, self.w)
-        time = 0
 
         pltPnts = [ax.scatter(*circle.get_even_plot_points()) for circle in self.circles]
 
@@ -194,8 +224,8 @@ class World(object):
             return
 
         def update(stepnum):
+            self.update_world(t=time_step)
             for circle, pltPnt in zip(self.circles, pltPnts):
-                self.update_world(t=time_step)
                 xp, yp = circle.get_even_plot_points()
                 pltPnt.set_offsets(list(zip(xp,yp)))
             return pltPnts
@@ -232,6 +262,13 @@ class World(object):
         return xyBins
 
     def find_all_collisions(self, xSteps=2, ySteps=2):
+
+        xyBins = self.split_world(xSteps, ySteps)
+        collisions = dict()
+        for circleList in xyBins.values():
+            collisions = self.find_collisions(circleList, collisions=collisions)
+
+        return [k for k, v in collisions.items() if v]elf, xSteps=2, ySteps=2):
 
         xyBins = self.split_world(xSteps, ySteps)
         collisions = dict()
