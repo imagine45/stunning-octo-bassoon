@@ -3,7 +3,23 @@ import matplotlib.pyplot as plt
 from math import sqrt, ceil, atan2
 import random
 import matplotlib.animation as animation
+def quadratic_solver(a,b,c):
 
+    if a == 0: return -c/b
+
+    start = b / (2 * a)
+    rootsq = start**2 - c / a
+
+    if rootsq < 0: return ()
+    if rootsq == 0: return (-start,)
+
+    root = sqrt(rootsq)
+    x1 = -start + root
+    x2 = -start - root
+    return (x1, x2)
+
+def dot(v1, v2):
+    return v1[0] * v2[0] + v1[1] * v2[1]
 
 def sqdistance(x1, y1, x2, y2):
     a = x1 - x2
@@ -11,10 +27,11 @@ def sqdistance(x1, y1, x2, y2):
     return a**2 + b**2
 
 class Circle(object):
-    def __init__(self,x,y,r,d=0,speed=0):
+    def __init__(self,x,y,r,m=1,d=0,speed=0):
         self.y = y
         self.x = x
         self.r = r
+        self.m = m
         self.vx, self.vy = polar_to_cart(speed, d)
 
     def update_position(self, t=0.1):
@@ -24,6 +41,29 @@ class Circle(object):
     def check_collision(self,otherCircle):
         c = self.r + otherCircle.r
         return sqdistance(self.x, self.y, otherCircle.x, otherCircle.y) <= c**2
+
+    def update_velocity_from_collision(self, otherCircle, c=0.9):
+
+        init_v1 = (self.vx, self.vy)
+        init_v2 = (otherCircle.vx, otherCircle.vy)
+
+        r_diff = (otherCirlce.x - self.x, otherCircle.y - self.y)
+
+        old_E1 = 0.5 * self.m * dot(init_v1, init_v1)
+        old_E2 = 0.5 * otherCircle.m * dot(init_v2, init_v2)
+        r1_sqrdiff = 0.5 * self.m * dot(r_diff, r_diff)
+        r2_sqrdiff = 0.5 * otherCircle.m * dot(r_diff, r_diff)
+
+        v1dotrdiff = -0.5 * self.m * 2 * dot(init_v1, r_diff)
+        v2dotrdiff = 0.5 * otherCircle.m * 2 * dot(init_v2, r_diff)
+
+        k1 = quadratic_solver((r1_sqrdiff + (self.m / otherCircle.m)**2 * r2_sqrdiff),
+                              (v1dotrdiff + self.m / otherCircle.m * v2dotrdiff),
+                              (1-c) * (old_E1 + old_E2))
+
+        assert len(k1) > 0
+
+        #TODO: Add code to update velocities based on k1
 
     def is_in_bin(self, bin):
         xPair, yPair = bin
