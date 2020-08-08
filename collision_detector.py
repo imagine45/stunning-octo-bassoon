@@ -42,28 +42,44 @@ class Circle(object):
         c = self.r + otherCircle.r
         return sqdistance(self.x, self.y, otherCircle.x, otherCircle.y) <= c**2
 
-    def update_velocity_from_collision(self, otherCircle, c=0.9):
+    @staticmethod
+    def handle_collision(c1, c2, energy_keep_fraction=0.9):
 
-        init_v1 = (self.vx, self.vy)
-        init_v2 = (otherCircle.vx, otherCircle.vy)
+        init_v1 = (c1.vx, c1.vy)
+        init_v2 = (c2.vx, c2.vy)
 
-        r_diff = (otherCirlce.x - self.x, otherCircle.y - self.y)
+        r_diff = (c2.x - c1.x, c2.y - c1.y)
 
-        old_E1 = 0.5 * self.m * dot(init_v1, init_v1)
-        old_E2 = 0.5 * otherCircle.m * dot(init_v2, init_v2)
-        r1_sqrdiff = 0.5 * self.m * dot(r_diff, r_diff)
-        r2_sqrdiff = 0.5 * otherCircle.m * dot(r_diff, r_diff)
+        old_E1 = 0.5 * c1.m * dot(init_v1, init_v1)
+        old_E2 = 0.5 * c2.m * dot(init_v2, init_v2)
+        r1_sqrdiff = 0.5 * c1.m * dot(r_diff, r_diff)
+        r2_sqrdiff = 0.5 * c2.m * dot(r_diff, r_diff)
 
-        v1dotrdiff = -0.5 * self.m * 2 * dot(init_v1, r_diff)
-        v2dotrdiff = 0.5 * otherCircle.m * 2 * dot(init_v2, r_diff)
+        v1dotrdiff = -0.5 * c1.m * 2 * dot(init_v1, r_diff)
+        v2dotrdiff = 0.5 * c2.m * 2 * dot(init_v2, r_diff)
 
-        k1 = quadratic_solver((r1_sqrdiff + (self.m / otherCircle.m)**2 * r2_sqrdiff),
-                              (v1dotrdiff + self.m / otherCircle.m * v2dotrdiff),
-                              (1-c) * (old_E1 + old_E2))
+        k1 = quadratic_solver((r1_sqrdiff + (c1.m / c2.m)**2 * r2_sqrdiff),
+                              (v1dotrdiff + c1.m / c2.m * v2dotrdiff),
+                              (1-energy_keep_fraction) * (old_E1 + old_E2))
 
-        assert len(k1) > 0
+        try:
+            assert len(k1) != 0
+            k1 = max(k1)
+            assert k1 > 0
+        except:
+            print(f"Circle 1 at ({c1.x},{c1.y}) with velocity ({c1.vx, c1.vy})")
+            print(f"Circle 2 at ({c2.x},{c2.y}) with velocity ({c2.vx, c2.vy})")
+            print(f"k1 is {k1}")
+            return
 
-        #TODO: Add code to update velocities based on k1
+        k2 = k1 * c1.m / c2.m
+
+        c1.vx = c1.vx - k1 * r_diff[0]
+        c1.vy = c1.vy - k1 * r_diff[1]
+
+        c2.vx = c2.vx + k2 * r_diff[0]
+        c2.vy = c2.vy + k2 * r_diff[1]
+
 
     def is_in_bin(self, bin):
         xPair, yPair = bin
@@ -216,15 +232,16 @@ class World(object):
                     break
 
         r = random.uniform(0, maxr)
+        m = 2*pi*r
 
         if moving:
-            speed = random.uniform(0, sqrt(self.l**2 + self.w**2))
+            speed = 5*random.uniform(0, sqrt(self.l**2 + self.w**2))
             direction = random.uniform(0, 2*pi)
         else:
             speed = 0
             direction = 0
 
-        return Circle(x,y,r, speed=speed, d=direction)
+        return Circle(x,y,r, m=m, speed=speed, d=direction)
 
     def populate(self, amountCircle, moving=False):
         self.circles = []
@@ -233,13 +250,15 @@ class World(object):
             newCircle = self.make_circle(moving=moving)
             self.circles.append(newCircle)
 
-    def update_world(self, t=0.1):
+    def update_world(self, t=0.1, energy_loss_fraction=0.5):
         for i, circle in enumerate(self.circles):
             circle.update_position(t=t)
 
         collisions = self.find_all_collisions()
         for i, j in collisions:
-            circle_collision(self.circles[i], self.circles[j])
+            #circle_collision(self.circles[i], self.circles[j])
+            Circle.handle_collision(self.circles[i], self.circles[j],
+                                    energy_keep_fraction=1-energy_loss_fraction)
         for circle in self.circles:
             if ((circle.x < circle.r and circle.vx < 0) or
                 (circle.r + circle.x > self.l and circle.vx > 0)):
@@ -248,7 +267,7 @@ class World(object):
                 (circle.r + circle.y > self.w and circle.vy > 0)):
                 circle.vy = -circle.vy
 
-    def plot(self, simulate=None, time_step=1e-3):
+    def plot(self, simulate=None, time_step=1e-3, energy_loss_fraction=0.5):
 
         # TODO: Update this to do collisions more physically, not just reverse
         # directions
@@ -264,7 +283,7 @@ class World(object):
             return
 
         def update(stepnum):
-            self.update_world(t=time_step)
+            self.update_world(t=time_step, energy_loss_fraction=energy_loss_fraction)
             for circle, pltPnt in zip(self.circles, pltPnts):
                 xp, yp = circle.get_even_plot_points()
                 pltPnt.set_offsets(list(zip(xp,yp)))
@@ -308,7 +327,7 @@ class World(object):
         for circleList in xyBins.values():
             collisions = self.find_collisions(circleList, collisions=collisions)
 
-        return [k for k, v in collisions.items() if v]elf, xSteps=2, ySteps=2):
+        return [k for k, v in collisions.items() if v]
 
         xyBins = self.split_world(xSteps, ySteps)
         collisions = dict()
