@@ -45,22 +45,38 @@ class Circle(object):
     @staticmethod
     def handle_collision(c1, c2, energy_keep_fraction=0.9):
 
-        init_v1 = (c1.vx, c1.vy)
-        init_v2 = (c2.vx, c2.vy)
-
         r_diff = (c2.x - c1.x, c2.y - c1.y)
 
-        old_E1 = 0.5 * c1.m * dot(init_v1, init_v1)
-        old_E2 = 0.5 * c2.m * dot(init_v2, init_v2)
-        r1_sqrdiff = 0.5 * c1.m * dot(r_diff, r_diff)
-        r2_sqrdiff = 0.5 * c2.m * dot(r_diff, r_diff)
 
-        v1dotrdiff = -0.5 * c1.m * 2 * dot(init_v1, r_diff)
-        v2dotrdiff = 0.5 * c2.m * 2 * dot(init_v2, r_diff)
+        angle_to_rotate = atan2(r_diff[1], r_diff[0])
 
-        k1 = quadratic_solver((r1_sqrdiff + (c1.m / c2.m)**2 * r2_sqrdiff),
-                              (v1dotrdiff + c1.m / c2.m * v2dotrdiff),
-                              (1-energy_keep_fraction) * (old_E1 + old_E2))
+        # Rotate circle positions and speeds so that x-axis is on
+        # line between circle centers
+
+        c1_s, c1_d = cart_to_polar(c1.vx, c1.vy)
+        c2_s, c2_d = cart_to_polar(c2.vx, c2.vy)
+        r_diff_l, r_diff_d = cart_to_polar(*r_diff)
+
+        c1_d = c1_d - angle_to_rotate
+        c2_d = c2_d - angle_to_rotate
+        r_diff_d = r_diff_d - angle_to_rotate
+
+        c1_vx, c1_vy = polar_to_cart(c1_s, c1_d)
+        c2_vx, c2_vy = polar_to_cart(c2_s, c2_d)
+        r_diff = polar_to_cart(r_diff_l, r_diff_d)
+
+
+        # Figure out how hard each circle gets pushed during collisions
+
+
+        old_E1 = c1.m * (c1_vx)**2
+        old_E2 = c2.m * (c2_vx)**2
+
+        sq_coeff = (c1.m * r_diff[0]**2) * (1 + (c1.m/c2.m))
+        lin_coeff = 2 * c1.m * r_diff[0] * (c2_vx - c1_vx)
+        const_coeff = ((c1.m * c1_vx**2) + (c2.m * c2_vx**2) - energy_keep_fraction * (old_E1 + old_E2))
+
+        k1 = quadratic_solver(sq_coeff, lin_coeff, const_coeff)
 
         try:
             assert len(k1) != 0
@@ -74,11 +90,19 @@ class Circle(object):
 
         k2 = k1 * c1.m / c2.m
 
-        c1.vx = c1.vx - k1 * r_diff[0]
-        c1.vy = c1.vy - k1 * r_diff[1]
+        c1_vx = c1_vx - k1 * r_diff[0]
+        c2_vx = c2_vx + k2 * r_diff[0]
 
-        c2.vx = c2.vx + k2 * r_diff[0]
-        c2.vy = c2.vy + k2 * r_diff[1]
+        #Rotate circle positions and speeds back to original angles
+
+        c1_s, c1_d = cart_to_polar(c1_vx, c1_vy)
+        c2_s, c2_d = cart_to_polar(c2_vx, c2_vy)
+
+        c1_d = c1_d + angle_to_rotate
+        c2_d = c2_d + angle_to_rotate
+
+        c1.vx, c1.vy = polar_to_cart(c1_s, c1_d)
+        c2.vx, c2.vy = polar_to_cart(c2_s, c2_d)
 
 
     def is_in_bin(self, bin):
