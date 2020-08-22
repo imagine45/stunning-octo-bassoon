@@ -3,8 +3,9 @@ import matplotlib.pyplot as plt
 from math import sqrt, ceil, atan2
 import random
 import matplotlib.animation as animation
-def quadratic_solver(a,b,c):
 
+
+def quadratic_solver(a, b, c):
     if a == 0: return -c/b
 
     start = b / (2 * a)
@@ -18,16 +19,37 @@ def quadratic_solver(a,b,c):
     x2 = -start - root
     return (x1, x2)
 
+
 def dot(v1, v2):
     return v1[0] * v2[0] + v1[1] * v2[1]
+
 
 def sqdistance(x1, y1, x2, y2):
     a = x1 - x2
     b = y1 - y2
     return a**2 + b**2
 
+
+def cart_to_polar(vx, vy):
+    s = sqrt(vx**2 + vy**2)
+    d = atan2(vy, vx)
+    return (s, d)
+
+
+def polar_to_cart(s, d):
+    vx = s * cos(d)
+    vy = s * sin(d)
+    return (vx, vy)
+
+
+def rotate_vector(vx, vy, angle):
+    size, direction = cart_to_polar(vx, vy)
+    direction += angle
+    return polar_to_cart(size, direction)
+
+
 class Circle(object):
-    def __init__(self,x,y,r,m=1,d=0,speed=0):
+    def __init__(self, x, y, r, m=1, d=0, speed=0):
         self.y = y
         self.x = x
         self.r = r
@@ -38,72 +60,42 @@ class Circle(object):
         self.x = self.x + t * self.vx
         self.y = self.y + t * self.vy
 
-    def check_collision(self,otherCircle):
+    def check_collision(self, otherCircle):
         c = self.r + otherCircle.r
         return sqdistance(self.x, self.y, otherCircle.x, otherCircle.y) <= c**2
 
     @staticmethod
     def handle_collision(c1, c2, energy_keep_fraction=0.9):
-
-        r_diff = (c2.x - c1.x, c2.y - c1.y)
-
-
-        angle_to_rotate = atan2(r_diff[1], r_diff[0])
+        angle_to_rotate = atan2(c2.x - c1.x, c2.y - c1.y)
 
         # Rotate circle positions and speeds so that x-axis is on
         # line between circle centers
 
-        c1_s, c1_d = cart_to_polar(c1.vx, c1.vy)
-        c2_s, c2_d = cart_to_polar(c2.vx, c2.vy)
-        r_diff_l, r_diff_d = cart_to_polar(*r_diff)
+        c1_vx, c1_vy = rotate_vector(c1.vx, c1.vy, -angle_to_rotate)
+        c2_vx, c2_vy = rotate_vector(c2.vx, c2.vy, -angle_to_rotate)
 
-        c1_d = c1_d - angle_to_rotate
-        c2_d = c2_d - angle_to_rotate
-        r_diff_d = r_diff_d - angle_to_rotate
+        # Remove velocity of center mass and only look at the disposable energy
 
-        c1_vx, c1_vy = polar_to_cart(c1_s, c1_d)
-        c2_vx, c2_vy = polar_to_cart(c2_s, c2_d)
-        r_diff = polar_to_cart(r_diff_l, r_diff_d)
+        v_cm = (c1.m * c1_vx + c2.m * c2_vx)/(c1.m + c2.m)
 
+        c1_vx -= v_cm
+        c2_vx -= v_cm
 
         # Figure out how hard each circle gets pushed during collisions
 
+        v_factor = energy_keep_fraction**0.5
+        c1_vx *= -v_factor
+        c2_vx *= -v_factor
 
-        old_E1 = c1.m * (c1_vx)**2
-        old_E2 = c2.m * (c2_vx)**2
+        # Re-add velocity of center mass
 
-        sq_coeff = (c1.m * r_diff[0]**2) * (1 + (c1.m/c2.m))
-        lin_coeff = 2 * c1.m * r_diff[0] * (c2_vx - c1_vx)
-        const_coeff = ((c1.m * c1_vx**2) + (c2.m * c2_vx**2) - energy_keep_fraction * (old_E1 + old_E2))
+        c1_vx += v_cm
+        c2_vx += v_cm
 
-        k1 = quadratic_solver(sq_coeff, lin_coeff, const_coeff)
+        # Rotate circle positions and speeds back to original angles
 
-        try:
-            assert len(k1) != 0
-            k1 = max(k1)
-            assert k1 > 0
-        except:
-            print(f"Circle 1 at ({c1.x},{c1.y}) with velocity ({c1.vx, c1.vy})")
-            print(f"Circle 2 at ({c2.x},{c2.y}) with velocity ({c2.vx, c2.vy})")
-            print(f"k1 is {k1}")
-            return
-
-        k2 = k1 * c1.m / c2.m
-
-        c1_vx = c1_vx - k1 * r_diff[0]
-        c2_vx = c2_vx + k2 * r_diff[0]
-
-        #Rotate circle positions and speeds back to original angles
-
-        c1_s, c1_d = cart_to_polar(c1_vx, c1_vy)
-        c2_s, c2_d = cart_to_polar(c2_vx, c2_vy)
-
-        c1_d = c1_d + angle_to_rotate
-        c2_d = c2_d + angle_to_rotate
-
-        c1.vx, c1.vy = polar_to_cart(c1_s, c1_d)
-        c2.vx, c2.vy = polar_to_cart(c2_s, c2_d)
-
+        c1.vx, c1.vy = rotate_vector(c1_vx, c1_vy, angle_to_rotate)
+        c2.vx, c2.vy = rotate_vector(c2_vx, c2_vy, angle_to_rotate)
 
     def is_in_bin(self, bin):
         xPair, yPair = bin
@@ -125,116 +117,15 @@ class Circle(object):
 
         return False
 
-    def get_plot_points(self):
-        spacing = ((self.x + self.r)-(self.x - self.r))/(1000-1)
-        xpoints = [self.x - self.r + i * spacing for i in range(1000)]
-
-
-        def yfunc(x):
-            try:
-                var = sqrt(self.r**2 - (x - self.x)**2)
-            except:
-                var = 0
-            return [self.y + var, self.y - var]
-
-        ypoints = sum([yfunc(x) for x in xpoints], [])
-        xpoints = sum([[x,x] for x in xpoints], [])
-        return xpoints, ypoints
-
-    def get_even_plot_points(self, numPoints = 1000):
-##        spacing = ((self.x + self.r)-(self.x - self.r))/(1000-1)
-##        xpoints = [self.x - self.r + i * spacing for i in range(1000)]
+    def get_plot_points(self, numPoints=1000):
 
         spacing = (2 * pi/(numPoints-1))   # 360 degrees is 2 * pi radians
         thetapoints = [0 + i * spacing for i in range(numPoints)]
 
-        # Way 0
-
         xpoints = [(cos(theta) * self.r) + self.x for theta in thetapoints]
         ypoints = [(sin(theta) * self.r) + self.y for theta in thetapoints]
 
-##        # Way 1
-##
-##        def xyfunc(theta):
-##                x = (cos(theta) * self.r) + self.x
-##                y = (sin(theta) * self.r) + self.y
-##            return [x,y]
-##
-##        xypoints = [xyfunc(theta) for theta in thetapoints]
-##
-##
-##
-##        # One way
-##
-##        xpoints = []
-##        ypoints = []
-##        for a in xypoints:
-##            xpoints.append(a[0])
-##            ypoints.append(a[1])
-##
-##
-##        # Other way
-##
-##        ypoints = [a[1] for a in xypoints]
-##        xpoints = [a[0] for a in xypoints]
-##
-##
-##        # Shortest code way
-##        xpoints, ypoints = zip(*xypoints)
-
         return xpoints, ypoints
-
-
-
-
-# def zip(*lists):
-#
-#     zippedlist = []
-#     for i in range(lists[0]):
-#         t = []
-#         for list in lists:
-#             t.append(list[i])
-#         zippedlist.append(t)
-def cart_to_polar(vx, vy):
-    s = sqrt(vx**2 + vy**2)
-    d = atan2(vy, vx)
-    return (s, d)
-
-def polar_to_cart(s, d):
-    vx = s * cos(d)
-    vy = s * sin(d)
-    return (vx, vy)
-
-def circle_collision(c1, c2):
-    #Figure out x difference and y difference between their centers
-
-    #Figure out the angle for the line between their centers (using x difference and y difference)
-
-    xdifference = c1.x - c2.x
-    ydifference = c1.y - c2.y
-
-    angle_to_rotate = atan2(ydifference, xdifference)
-
-    c1_s, c1_d = cart_to_polar(c1.vx, c1.vy)
-    c2_s, c2_d = cart_to_polar(c2.vx, c2.vy)
-
-    c1_d = c1_d - angle_to_rotate
-    c2_d = c2_d - angle_to_rotate
-
-    c1_vx, c1_vy = polar_to_cart(c1_s, c1_d)
-    c2_vx, c2_vy = polar_to_cart(c2_s, c2_d)
-
-    c1_vx = - c1_vx
-    c2_vx = - c2_vx
-
-    c1_s, c1_d = cart_to_polar(c1_vx, c1_vy)
-    c2_s, c2_d = cart_to_polar(c2_vx, c2_vy)
-
-    c1_d = c1_d + angle_to_rotate
-    c2_d = c2_d + angle_to_rotate
-
-    c1.vx, c1.vy = polar_to_cart(c1_s, c1_d)
-    c2.vx, c2.vy = polar_to_cart(c2_s, c2_d)
 
 
 class World(object):
@@ -280,15 +171,14 @@ class World(object):
 
         collisions = self.find_all_collisions()
         for i, j in collisions:
-            #circle_collision(self.circles[i], self.circles[j])
             Circle.handle_collision(self.circles[i], self.circles[j],
                                     energy_keep_fraction=1-energy_loss_fraction)
         for circle in self.circles:
-            if ((circle.x < circle.r and circle.vx < 0) or
-                (circle.r + circle.x > self.l and circle.vx > 0)):
+            if (circle.x < circle.r and circle.vx < 0) or \
+               (circle.r + circle.x > self.l and circle.vx > 0):
                 circle.vx = -circle.vx
-            if ((circle.y < circle.r and circle.vy < 0) or
-                (circle.r + circle.y > self.w and circle.vy > 0)):
+            if (circle.y < circle.r and circle.vy < 0) or \
+               (circle.r + circle.y > self.w and circle.vy > 0):
                 circle.vy = -circle.vy
 
     def plot(self, simulate=None, time_step=1e-3, energy_loss_fraction=0.5):
@@ -300,7 +190,7 @@ class World(object):
         ax.set_xlim(0, self.l)
         ax.set_ylim(0, self.w)
 
-        pltPnts = [ax.scatter(*circle.get_even_plot_points()) for circle in self.circles]
+        pltPnts = [ax.scatter(*circle.get_plot_points()) for circle in self.circles]
 
         if simulate is None:
             plt.show()
@@ -309,24 +199,24 @@ class World(object):
         def update(stepnum):
             self.update_world(t=time_step, energy_loss_fraction=energy_loss_fraction)
             for circle, pltPnt in zip(self.circles, pltPnts):
-                xp, yp = circle.get_even_plot_points()
-                pltPnt.set_offsets(list(zip(xp,yp)))
+                xp, yp = circle.get_plot_points()
+                pltPnt.set_offsets(list(zip(xp, yp)))
             return pltPnts
 
         anim = animation.FuncAnimation(fig, update, frames=ceil(simulate/time_step),
                                        interval=5, blit=False, repeat=False)
         return anim
 
-    def find_collisions(self, circles, collisions = {}):
+    def find_collisions(self, circles, collisions={}):
         # circles is a list of indices from self.circles
         # collisions is a dictionary that maps index pairs (i,j) to booleans
 
         for i in circles:
             for j in circles:
-                if i >= j or ((i,j) in collisions): continue
+                if i >= j or ((i, j) in collisions): continue
                 c = self.circles[i]
                 otherCircle = self.circles[j]
-                collisions[(i,j)] = c.check_collision(otherCircle)
+                collisions[(i, j)] = c.check_collision(otherCircle)
 
         return collisions
 
