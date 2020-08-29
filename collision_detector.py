@@ -48,10 +48,42 @@ def rotate_vector(vx, vy, angle):
     return polar_to_cart(size, direction)
 
 
+class ReferenceFrame(object):
+
+    def __init__(self, angle, *object_list, cm=True):
+        self.object_list = object_list
+        self.angle = angle
+        self.x, self.y, self.vx, self.vy = 0, 0, 0, 0
+        if cm:
+            m = sum(shape.m for shape in self.object_list)
+            self.x = sum(shape.m * shape.x for shape in self.object_list)/m
+            self.y = sum(shape.m * shape.y for shape in self.object_list)/m
+            self.vx = sum(shape.m * shape.vx for shape in self.object_list)/m
+            self.vy = sum(shape.m * shape.vy for shape in self.object_list)/m
+
+    def __enter__(self):
+        for shape in self.object_list:
+            shape.x, shape.y = rotate_vector(shape.x - self.x,
+                                             shape.y - self.y,
+                                             self.angle)
+            shape.vx, shape.vy = rotate_vector(shape.vx - self.vx,
+                                               shape.vy - self.vy,
+                                               self.angle)
+
+    def __exit__(self, type, value, traceback):
+        for shape in self.object_list:
+            shape.x, shape.y = rotate_vector(shape.x, shape.y, -self.angle)
+            shape.x += self.x
+            shape.y += self.y
+
+            shape.vx, shape.vy = rotate_vector(shape.vx, shape.vy, -self.angle)
+            shape.vx += self.vx
+            shape.vy += self.vy
+
+
 class Circle(object):
     def __init__(self, x, y, r, m=1, d=0, speed=0):
-        self.y = y
-        self.x = x
+        self.x, self.y = x, y
         self.r = r
         self.m = m
         self.vx, self.vy = polar_to_cart(speed, d)
@@ -69,37 +101,14 @@ class Circle(object):
     def handle_collision(c1, c2, energy_keep_fraction=0.9):
         angle_to_rotate = atan2(c2.y - c1.y, c2.x - c1.x)
 
-        # Rotate circle positions and speeds so that x-axis is on
-        # line between circle centers
+        # Need to rotate circle positions and speeds so
+        # that x-axis is on line between circle centers
 
-        c1_vx, c1_vy = rotate_vector(c1.vx, c1.vy, -angle_to_rotate)
-        c2_vx, c2_vy = rotate_vector(c2.vx, c2.vy, -angle_to_rotate)
-
-        # Remove velocity of center mass and only look at the disposable energy
-
-        v_cm = (c1.m * c1_vx + c2.m * c2_vx)/(c1.m + c2.m)
-
-        c1_vx -= v_cm
-        c2_vx -= v_cm
-
-        # Figure out how hard each circle gets pushed during collisions
-
-        if c1_vx < 0 and c2_vx > 0:
-            return
-
-        v_factor = energy_keep_fraction**0.5
-        c1_vx *= -v_factor
-        c2_vx *= -v_factor
-
-        # Re-add velocity of center mass
-
-        c1_vx += v_cm
-        c2_vx += v_cm
-
-        # Rotate circle positions and speeds back to original angles
-
-        c1.vx, c1.vy = rotate_vector(c1_vx, c1_vy, angle_to_rotate)
-        c2.vx, c2.vy = rotate_vector(c2_vx, c2_vy, angle_to_rotate)
+        with ReferenceFrame(-angle_to_rotate, c1, c2):
+            if c1.vx > 0 and c2.vx < 0:
+                v_factor = energy_keep_fraction**0.5
+                c1.vx *= -v_factor
+                c2.vx *= -v_factor
 
     def is_in_bin(self, bin):
         xPair, yPair = bin
@@ -160,7 +169,7 @@ class World(object):
             speed = 0
             direction = 0
 
-        return Circle(x,y,r, m=m, speed=speed, d=direction)
+        return Circle(x, y, r, m=m, speed=speed, d=direction)
 
     def populate(self, amountCircle, moving=False):
         self.circles = []
@@ -177,13 +186,14 @@ class World(object):
         for i, j in collisions:
             Circle.handle_collision(self.circles[i], self.circles[j],
                                     energy_keep_fraction=1-energy_loss_fraction)
+        v_factor = (1-energy_loss_fraction)**0.5
         for circle in self.circles:
             if (circle.x < circle.r and circle.vx < 0) or \
                (circle.r + circle.x > self.l and circle.vx > 0):
-                circle.vx = -circle.vx
+                circle.vx *= -v_factor
             if (circle.y < circle.r and circle.vy < 0) or \
                (circle.r + circle.y > self.w and circle.vy > 0):
-                circle.vy = -circle.vy
+                circle.vy *= -v_factor
 
     def plot(self, simulate=None, time_step=1e-3, energy_loss_fraction=0.5):
 
