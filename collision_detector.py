@@ -61,12 +61,13 @@ class Circle(object):
         self.y = self.y + t * self.vy
 
     def check_collision(self, otherCircle):
-        c = self.r + otherCircle.r
-        return sqdistance(self.x, self.y, otherCircle.x, otherCircle.y) <= c**2
+        csq = (self.r + otherCircle.r)**2
+        dsq = sqdistance(self.x, self.y, otherCircle.x, otherCircle.y)
+        return dsq <= csq
 
     @staticmethod
     def handle_collision(c1, c2, energy_keep_fraction=0.9):
-        angle_to_rotate = atan2(c2.x - c1.x, c2.y - c1.y)
+        angle_to_rotate = atan2(c2.y - c1.y, c2.x - c1.x)
 
         # Rotate circle positions and speeds so that x-axis is on
         # line between circle centers
@@ -82,6 +83,9 @@ class Circle(object):
         c2_vx -= v_cm
 
         # Figure out how hard each circle gets pushed during collisions
+
+        if c1_vx < 0 and c2_vx > 0:
+            return
 
         v_factor = energy_keep_fraction**0.5
         c1_vx *= -v_factor
@@ -190,7 +194,7 @@ class World(object):
         ax.set_xlim(0, self.l)
         ax.set_ylim(0, self.w)
 
-        pltPnts = [ax.scatter(*circle.get_plot_points()) for circle in self.circles]
+        pltPnts = [ax.scatter(*circle.get_plot_points(), s=1) for circle in self.circles]
 
         if simulate is None:
             plt.show()
