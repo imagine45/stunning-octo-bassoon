@@ -6,6 +6,9 @@ import matplotlib.animation as animation
 
 
 def quadratic_solver(a, b, c):
+
+    ##Come back to this
+
     if a == 0: return -c/b
 
     start = b / (2 * a)
@@ -54,12 +57,15 @@ class ReferenceFrame(object):
         self.object_list = object_list
         self.angle = angle
         self.x, self.y, self.vx, self.vy = 0, 0, 0, 0
+
+##cm = Center of Mass
+
         if cm:
-            m = sum(shape.m for shape in self.object_list)
-            self.x = sum(shape.m * shape.x for shape in self.object_list)/m
-            self.y = sum(shape.m * shape.y for shape in self.object_list)/m
-            self.vx = sum(shape.m * shape.vx for shape in self.object_list)/m
-            self.vy = sum(shape.m * shape.vy for shape in self.object_list)/m
+            m = sum(shape.m for shape in self.object_list) ##Adds the masses of all the objects
+            self.x = sum(shape.m * shape.x for shape in self.object_list)/m ##^^^ except it multiplies by x of each shape and divides by mass
+            self.y = sum(shape.m * shape.y for shape in self.object_list)/m ##^^^ but y
+            self.vx = sum(shape.m * shape.vx for shape in self.object_list)/m ##^^^ but with vx
+            self.vy = sum(shape.m * shape.vy for shape in self.object_list)/m ##^^^ but with vy
 
     def __enter__(self):
         for shape in self.object_list:
@@ -81,6 +87,7 @@ class ReferenceFrame(object):
             shape.vy += self.vy
 
 
+
 class Circle(object):
     def __init__(self, x, y, r, m=1, d=0, speed=0):
         self.x, self.y = x, y
@@ -89,10 +96,13 @@ class Circle(object):
         self.vx, self.vy = polar_to_cart(speed, d)
 
     def update_position(self, t=0.1):
-        self.x = self.x + t * self.vx
-        self.y = self.y + t * self.vy
+        self.x += t * self.vx
+        self.y += t * self.vy
 
     def check_collision(self, otherCircle):
+
+##csq finds minimum sqdistance between two circles without colliding, dsq finds what the sqdistance is.
+
         csq = (self.r + otherCircle.r)**2
         dsq = sqdistance(self.x, self.y, otherCircle.x, otherCircle.y)
         return dsq <= csq
@@ -110,28 +120,65 @@ class Circle(object):
                 c1.vx *= -v_factor
                 c2.vx *= -v_factor
 
+    def is_in_circle(self, x, y):
+        """
+        Given a point (x, y), returns whether or not the point is in this circle
+        Inputs:
+            x - x-coordinate of point
+            y - y-coordinate of point
+
+        Returns a boolean - True if point is in circle, False otherwise
+        """
+        return (sqdistance(x, y, self.x, self.y) <= self.r**2)
+
     def is_in_bin(self, bin):
+        """
+        Given a bin (an aligned rectangle in space), returns whether or not the
+        circle is in the bin (i.e. whether it intersects the bin).
+
+        Inputs:
+            bin - a pair of pairs of numbers ((xLow, xHigh), (yLow, yHigh)) that
+                  describe the ends of the rectangle in the x and y directions
+
+        Returns a boolean - True if the circle intersects the bin, False otherwise
+        """
+
         xPair, yPair = bin
         xLow, xHigh = xPair
         yLow, yHigh = yPair
 
-        circlePoints = [(self.x, self.y), (self.x - self.r, self.y), (self.x + self.r, self.y),
-                        (self.x, self.y - self.r), (self.x, self.y + self.r)]
+        circlePoints = [(self.x, self.y),
+                        (self.x - self.r, self.y),
+                        (self.x + self.r, self.y),
+                        (self.x, self.y - self.r),
+                        (self.x, self.y + self.r)]
 
         for x, y in circlePoints:
             if xLow <= x <= xHigh and yLow <= y <= yHigh: return True
 
-        cornerPoints = [(xLow, yLow), (xLow, yHigh),
-                        (xHigh, yLow), (xHigh, yHigh)]
+        cornerPoints = [(xLow, yLow),
+                        (xLow, yHigh),
+                        (xHigh, yLow),
+                        (xHigh, yHigh)]
 
-        rsq = self.r**2
         for x, y in cornerPoints:
-            if sqdistance(x, y, self.x, self.y) <= rsq: return True
+            if self.is_in_circle(x, y): return True
 
         return False
 
     def get_plot_points(self, numPoints=1000):
+        """
+        Given the amount of points to plot a circle, returns the x and y
+        positions of those points.
 
+        Inputs:
+            numPoints - the amount of points you want in the circle
+            (more points would mean a more fleshed out circle)
+            Default is 1000 points
+
+        Returns (xpoints, ypoints), the two of which are the lists of positions
+        of each point.
+        """
         spacing = (2 * pi/(numPoints-1))   # 360 degrees is 2 * pi radians
         thetapoints = [0 + i * spacing for i in range(numPoints)]
 
@@ -143,15 +190,25 @@ class Circle(object):
 
 class World(object):
     def __init__(self, l, w):
+        """Inputs are length and width (l and w).
+        Length is on the x axis and width is on the y axis."""
         self.l = l
         self.w = w
 
     def make_circle(self, moving=False):
+        """Creates a circle that is not immediately colliding with the edge of
+        the world or another circle in the world.
+
+            Inputs:
+                moving - if you want your new circle to move or not.
+                Default is False.
+        """
         maxr = -1
         while maxr < 0:
-            x = random.uniform(0, self.l)
+            x = random.uniform(0, self.l) # Center of circle
             y = random.uniform(0, self.w)
             maxr = min((self.l - x), (self.w - y), y, x)
+            # picks the minimum distance from the edge of the world.
 
             for circle in self.circles:
                 d = sqrt(sqdistance(x, y, circle.x, circle.y))
@@ -160,7 +217,7 @@ class World(object):
                     break
 
         r = random.uniform(0, maxr)
-        m = 2*pi*r
+        m = 2*pi*r # m = mass
 
         if moving:
             speed = 5*random.uniform(0, sqrt(self.l**2 + self.w**2))
@@ -172,14 +229,26 @@ class World(object):
         return Circle(x, y, r, m=m, speed=speed, d=direction)
 
     def populate(self, amountCircle, moving=False):
+        """Creates an amount of new circles in the world to replace any old ones
+
+        Inputs:
+            amountCircle - How many circles you want to make.
+            moving - Do you want your circles to move? Default is False. """
         self.circles = []
-        # self.circles = [self.make_circle(moving=moving) for i in range(amountCircle)]
         for i in range(amountCircle):
             newCircle = self.make_circle(moving=moving)
             self.circles.append(newCircle)
 
     def update_world(self, t=0.1, energy_loss_fraction=0.5):
-        for i, circle in enumerate(self.circles):
+
+        """Updates the world to simulate motion once.
+
+        Inputs:
+            t - time between each update. Default = 0.1
+            energy_loss_fraction - fraction of energy you lose every collision.
+            Default = 0.5"""
+
+        for circle in self.circles:
             circle.update_position(t=t)
 
         collisions = self.find_all_collisions()
@@ -188,7 +257,7 @@ class World(object):
                                     energy_keep_fraction=1-energy_loss_fraction)
         v_factor = (1-energy_loss_fraction)**0.5
         for circle in self.circles:
-            if (circle.x < circle.r and circle.vx < 0) or \
+            if (circle.x < circle.r and circle.vx <= 0) or \
                (circle.r + circle.x > self.l and circle.vx > 0):
                 circle.vx *= -v_factor
             if (circle.y < circle.r and circle.vy < 0) or \
@@ -197,37 +266,62 @@ class World(object):
 
     def plot(self, simulate=None, time_step=1e-3, energy_loss_fraction=0.5):
 
-        # TODO: Update this to do collisions more physically, not just reverse
-        # directions
+        """Plots all points and animates the circles if you wish it.
 
-        fig, ax = plt.subplots()
-        ax.set_xlim(0, self.l)
-        ax.set_ylim(0, self.w)
+        Inputs:
+            simulate (float) - Whether or not you want your plot to simulate and if so how long
+             you want it to run. Default is that the plot will not simulate.
+            time_step - The amount of time between updates. Default is 1e-3.
+            energy_loss_fraction - the fraction of energy lost every collision.
+             Default is 0.5.
 
-        pltPnts = [ax.scatter(*circle.get_plot_points(), s=1) for circle in self.circles]
+         If simulate is unspecified, then it will return nothing.
 
-        if simulate is None:
-            plt.show()
-            return
+         If simulate is a number, it will return an animation.
+
+        """
+
+        fig, ax = plt.subplots() # Returns an overall figure object (contains all graphs you might make) and an axis object (just the one graph you actually care about)
+        ax.set_xlim(0, self.l) # Sets start and end points on plot x-axis to match the world
+        ax.set_ylim(0, self.w) # Sets start and end points on plot y-axis to match the world
+
+        pltPnts = [ax.scatter(*circle.get_plot_points(), s=1) for circle in self.circles] # list of scatterplots for circles in world
+
+        if simulate is None: return
 
         def update(stepnum):
             self.update_world(t=time_step, energy_loss_fraction=energy_loss_fraction)
             for circle, pltPnt in zip(self.circles, pltPnts):
                 xp, yp = circle.get_plot_points()
-                pltPnt.set_offsets(list(zip(xp, yp)))
+                pltPnt.set_offsets(list(zip(xp, yp))) # Updates graph (pltPnt) to have new x and y values
             return pltPnts
 
         anim = animation.FuncAnimation(fig, update, frames=ceil(simulate/time_step),
                                        interval=5, blit=False, repeat=False)
         return anim
 
-    def find_collisions(self, circles, collisions={}):
+    def find_collisions(self, circle_indices, collisions={}):
         # circles is a list of indices from self.circles
         # collisions is a dictionary that maps index pairs (i,j) to booleans
+        """Adding new entries to collision dictionary. Checks first to see if
+            what it's checking is already in the dictionary.
 
-        for i in circles:
-            for j in circles:
-                if i >= j or ((i, j) in collisions): continue
+            Inputs:
+
+                circle_indices - A list of indices from self.circles to check
+                 collisions between specific circles.
+                collisions - A dictionary that maps index pairs (i,j) to
+                 booleans. Default is a blank dictionary.
+
+            Returns the new and improved collisions dictionary.
+
+            MODIFIES THE ORIGINAL DICTIONARY"""
+        for i in circle_indices:
+            for j in circle_indices:
+                if i >= j or ((i, j) in collisions): continue #Checks to see if
+                # comparisons have already been made, since you compare the
+                #lower indices to all the higher ones beforehand, you don't need
+                #to check again.
                 c = self.circles[i]
                 otherCircle = self.circles[j]
                 collisions[(i, j)] = c.check_collision(otherCircle)
@@ -235,6 +329,18 @@ class World(object):
         return collisions
 
     def split_world(self, xSteps, ySteps):
+
+        """Splits the world into bins and figures out which circles are in which
+            bins.
+
+            Inputs:
+                xSteps - The amount of steps across the world horizontally. In
+                 other words, the number of bins on the x axis.
+                ySteps - The amount of steps across the world vertically. In
+                 other words, the number of bins on the y axis.
+            Returns a dictionary which contains the bins as keys and the circles
+             within them in a list as values."""
+
 
         xStepSize = self.l/xSteps
         yStepSize = self.w/ySteps
@@ -250,15 +356,18 @@ class World(object):
 
     def find_all_collisions(self, xSteps=2, ySteps=2):
 
-        xyBins = self.split_world(xSteps, ySteps)
-        collisions = dict()
-        for circleList in xyBins.values():
-            collisions = self.find_collisions(circleList, collisions=collisions)
+        """Finds every collision within every bin.
 
-        return [k for k, v in collisions.items() if v]
+            Inputs:
+                xSteps - The amount of steps across the world horizontally. In
+                 other words, the number of bins on the x axis.
+                ySteps - The amount of steps across the world vertically. In
+                 other words, the number of bins on the y axis.
+
+            Returns every pair of circles that collided."""
 
         xyBins = self.split_world(xSteps, ySteps)
-        collisions = dict()
+        collisions = {}
         for circleList in xyBins.values():
             collisions = self.find_collisions(circleList, collisions=collisions)
 
