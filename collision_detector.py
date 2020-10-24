@@ -86,18 +86,34 @@ class ReferenceFrame(object):
             shape.vx += self.vx
             shape.vy += self.vy
 
-
-
-class Circle(object):
-    def __init__(self, x, y, r, m=1, d=0, speed=0):
+class Shape(object):
+    def __init__(self, x, y, m=1, d=0, speed=0):
         self.x, self.y = x, y
-        self.r = r
         self.m = m
         self.vx, self.vy = polar_to_cart(speed, d)
 
     def update_position(self, t=0.1):
         self.x += t * self.vx
         self.y += t * self.vy
+
+    def update_velocity(self, ax, ay, t=0.1):
+        self.vx += t * ax
+        self.vy += t * ay
+
+    def check_collision(self, otherShape):
+        raise NotImplementedError
+
+    def is_in_bin(self, bin):
+        raise NotImplementedError
+
+    def get_plot_points(self, numPoints=1000):
+        raise NotImplementedError
+
+
+class Circle(Shape):
+    def __init__(self, x, y, r, m=1, d=0, speed=0):
+        super().__init__(x, y, m=m, d=d, speed=speed)
+        self.r = r
 
     def check_collision(self, otherCircle):
 
@@ -188,20 +204,38 @@ class Circle(object):
         return xpoints, ypoints
 
 
+class ExplodingCircle(Circle):
+    def __init__(self, x, y, r, world, m=1, d=0, speed=0, tbe=2, explosionr=5):
+        super().__init__(x, y, r, m=m, d=d, speed=speed)
+        self.tbe = tbe
+        self.explosionr = explosionr
+        self.world = world
+
+    def update_position(self, t=0.1):
+        super().update_position(t=0.1)
+        self.tbe -= t
+        if self.tbe <= 0:
+            self.world.track_explosion(self)
+
+
 class World(object):
-    def __init__(self, l, w):
+    def __init__(self, l, w, gravity=False, gravity_strength=10):
         """Inputs are length and width (l and w).
         Length is on the x axis and width is on the y axis."""
         self.l = l
         self.w = w
+        self.gravity = [0, -gravity_strength if gravity else 0]
 
-    def make_circle(self, moving=False):
+    def make_circle(self, moving=False, type="ring", exploding_radius = 5,
+                    exploding_time=None):
         """Creates a circle that is not immediately colliding with the edge of
         the world or another circle in the world.
 
             Inputs:
                 moving - if you want your new circle to move or not.
-                Default is False.
+                 Default is False.
+                type - "ring" or "disc". Ring is like an outline of a circle,
+                 and a disc is a filled in one. Default is "ring".
         """
         maxr = -1
         while maxr < 0:
@@ -217,27 +251,45 @@ class World(object):
                     break
 
         r = random.uniform(0, maxr)
-        m = 2*pi*r # m = mass
-
+        if type == "ring":
+            m = 2*pi*r # m = mass
+        elif type == "disc":
+            m = pi*r**2
         if moving:
             speed = 5*random.uniform(0, sqrt(self.l**2 + self.w**2))
             direction = random.uniform(0, 2*pi)
         else:
             speed = 0
             direction = 0
+        if exploding_time is None:
+            return Circle(x, y, r, m=m, speed=speed, d=direction)
+        else:
+            return ExplodingCircle(x, y, r, self,
+                                   m=m, d=d, speed=speed,
+                                   tbe=exploding_time,
+                                   explosionr=exploding_radius)
 
-        return Circle(x, y, r, m=m, speed=speed, d=direction)
+    def add_circle(self, moving=False, type="ring", exploding_radius = 5,
+                   exploding_time=None):
 
-    def populate(self, amountCircle, moving=False):
+        self.circles.append(self.make_circle(moving=moving, type=type,
+                                             exploding_radius=exploding_radius,
+                                             exploding_time=exploding_time))
+        self.exploded.append(False)
+
+
+    def populate(self, amountCircle, moving=False, type="ring"):
         """Creates an amount of new circles in the world to replace any old ones
 
         Inputs:
             amountCircle - How many circles you want to make.
-            moving - Do you want your circles to move? Default is False. """
+            moving - Do you want your circles to move? Default is False.
+            type - "ring" or "disc". Ring is like an outline of a circle,
+             and a disc is a filled in one. Default is "ring". """
         self.circles = []
+        self.exploded = []
         for i in range(amountCircle):
-            newCircle = self.make_circle(moving=moving)
-            self.circles.append(newCircle)
+            self.add_circle(moving=moving, type=type)
 
     def update_world(self, t=0.1, energy_loss_fraction=0.5):
 
@@ -250,6 +302,12 @@ class World(object):
 
         for circle in self.circles:
             circle.update_position(t=t)
+            circle.update_velocity(self.gravity[0], self.gravity[1], t=t)
+
+        self.circles = [circle for i, circle in enumerate(self.circles)
+                        if not self.exploded[i]]
+
+        self.exploded = [False for circle in self.circles]
 
         collisions = self.find_all_collisions()
         for i, j in collisions:
@@ -262,7 +320,17 @@ class World(object):
                 circle.vx *= -v_factor
             if (circle.y < circle.r and circle.vy < 0) or \
                (circle.r + circle.y > self.w and circle.vy > 0):
+                circle.update_velocity(self.gravity[0], -self.gravity[1], t=t)
                 circle.vy *= -v_factor
+
+
+    def track_explosion(self, exploder):
+        explosion = Circle(exploder.x, exploder.y, exploder.r + exploder.explosionr)
+        for i, circle in enumerate(self.circles):
+            if circle.check_collision(explosion):
+                self.exploded[i] = True
+
+
 
     def plot(self, simulate=None, time_step=1e-3, energy_loss_fraction=0.5):
 
@@ -285,19 +353,27 @@ class World(object):
         ax.set_xlim(0, self.l) # Sets start and end points on plot x-axis to match the world
         ax.set_ylim(0, self.w) # Sets start and end points on plot y-axis to match the world
 
-        pltPnts = [ax.scatter(*circle.get_plot_points(), s=1) for circle in self.circles] # list of scatterplots for circles in world
+        xl, yl = [], []
+        for circle in self.circles:
+            xp, yp = circle.get_plot_points()
+            xl += xp
+            yl += yp
+        pltPnts = ax.scatter(xl, yl, s=1)
 
         if simulate is None: return
 
         def update(stepnum):
             self.update_world(t=time_step, energy_loss_fraction=energy_loss_fraction)
-            for circle, pltPnt in zip(self.circles, pltPnts):
+            xl, yl = [], []
+            for circle in self.circles:
                 xp, yp = circle.get_plot_points()
-                pltPnt.set_offsets(list(zip(xp, yp))) # Updates graph (pltPnt) to have new x and y values
-            return pltPnts
+                xl += xp
+                yl += yp
+            pltPnts.set_offsets(list(zip(xl, yl))) # Updates graph (pltPnt) to have new x and y values
+            return [pltPnts]
 
         anim = animation.FuncAnimation(fig, update, frames=ceil(simulate/time_step),
-                                       interval=5, blit=False, repeat=False)
+                                       interval=time_step*1e3, blit=False, repeat=False)
         return anim
 
     def find_collisions(self, circle_indices, collisions={}):
