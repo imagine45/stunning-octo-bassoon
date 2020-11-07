@@ -203,6 +203,39 @@ class Circle(Shape):
 
         return xpoints, ypoints
 
+class Cannon(Shape):
+    def __init__(self, x, y, orientation, world,
+                 cannonball_radius = 30,
+                 cannonball_speed = 100,
+                 cannonball_frequency = 1,
+                 tbe=2, explosionr=5):
+        super().__init__(x,y,m=0,speed=0)
+        self.orientation = orientation
+        self.cannonball_frequency = cannonball_frequency
+        self.cannonball_radius = cannonball_radius
+        self.cannonball_speed = cannonball_speed
+        self.time_to_next_cannonball = 0
+        self.tbe = tbe
+        self.explosionr = explosionr
+        self.world = world
+        world.cannons.append(self)
+
+    def update_position(self, t=0.1):
+        self.time_to_next_cannonball -= t
+        if self.time_to_next_cannonball <= 0:
+            #make a cannonball
+            circle1 = ExplodingCircle(self.x, self.y, self.cannonball_radius,
+                                      self.world, d=self.orientation,
+                                      speed=self.cannonball_speed,
+                                      tbe=self.tbe, explosionr=self.explosionr)
+            #add cannonball  to the world
+            self.world.circles.append(circle1)
+            self.world.exploded.append(False)
+            self.time_to_next_cannonball += self.cannonball_frequency
+
+
+    def change_orientation(self, angle):
+        self.orientiation += angle
 
 class ExplodingCircle(Circle):
     def __init__(self, x, y, r, world, m=1, d=0, speed=0, tbe=2, explosionr=5):
@@ -225,6 +258,7 @@ class World(object):
         self.l = l
         self.w = w
         self.gravity = [0, -gravity_strength if gravity else 0]
+        self.cannons = []
 
     def make_circle(self, moving=False, type="ring", exploding_radius = 5,
                     exploding_time=None):
@@ -265,7 +299,7 @@ class World(object):
             return Circle(x, y, r, m=m, speed=speed, d=direction)
         else:
             return ExplodingCircle(x, y, r, self,
-                                   m=m, d=d, speed=speed,
+                                   m=m, d=direction, speed=speed,
                                    tbe=exploding_time,
                                    explosionr=exploding_radius)
 
@@ -299,6 +333,9 @@ class World(object):
             t - time between each update. Default = 0.1
             energy_loss_fraction - fraction of energy you lose every collision.
             Default = 0.5"""
+
+        for cannon in self.cannons:
+            cannon.update_position(t=t)
 
         for circle in self.circles:
             circle.update_position(t=t)
