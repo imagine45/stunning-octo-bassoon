@@ -109,6 +109,11 @@ class Shape(object):
     def get_plot_points(self, numPoints=1000):
         raise NotImplementedError
 
+    def start(self):
+        pass
+
+    def finish(self):
+        pass
 
 class Circle(Shape):
     def __init__(self, x, y, r, m=1, d=0, speed=0):
@@ -207,22 +212,19 @@ class Cannon(Shape):
     def __init__(self, x, y, orientation, world,
                  cannonball_radius = 30,
                  cannonball_speed = 100,
-                 cannonball_frequency = 1,
                  tbe=2, explosionr=5):
         super().__init__(x,y,m=0,speed=0)
         self.orientation = orientation
-        self.cannonball_frequency = cannonball_frequency
         self.cannonball_radius = cannonball_radius
         self.cannonball_speed = cannonball_speed
-        self.time_to_next_cannonball = 0
+        self.next_cannonball = False
         self.tbe = tbe
         self.explosionr = explosionr
         self.world = world
         world.cannons.append(self)
 
     def update_position(self, t=0.1):
-        self.time_to_next_cannonball -= t
-        if self.time_to_next_cannonball <= 0:
+        if self.next_cannonball:
             #make a cannonball
             circle1 = ExplodingCircle(self.x, self.y, self.cannonball_radius,
                                       self.world, d=self.orientation,
@@ -231,12 +233,49 @@ class Cannon(Shape):
             #add cannonball  to the world
             self.world.circles.append(circle1)
             self.world.exploded.append(False)
-            self.time_to_next_cannonball += self.cannonball_frequency
+            self.next_cannonball = False
 
 
     def change_orientation(self, angle):
         self.orientiation += angle
 
+    def start(self):
+        self.listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+        self.listener.start()
+
+    def finish(self):
+        self.listener.stop()
+
+    def on_press(self, key):
+        # if key == keyboard.Key.space:
+        #     if time() - t >= 5 and ready == 1:
+        #         print("Locked and loaded!")
+        #         ready = 0
+        #     elif ready == 1:
+        #         print("The cannon needs a break.")
+        #         ready = 0
+        try:
+            if key.char == "a":
+                self.x -= 1
+            elif key.char == "d":
+                self.x += 1
+            if key.char == "w":
+                self.y -= 1
+            elif key.char == "s":
+                self.y += 1
+            if self.orientation > 0:
+                if key.char == "q":
+                    self.orientation -= 2
+            if self.orientation < 180:
+                if key.char == "e":
+                    self.orientation += 2
+        except AttributeError:
+            pass
+    def on_release(key):
+        if key == keyboard.Key.space:
+            # ready = 1
+            # if time() - t >= 5:
+            self.next_cannonball = True
 class ExplodingCircle(Circle):
     def __init__(self, x, y, r, world, m=1, d=0, speed=0, tbe=2, explosionr=5):
         super().__init__(x, y, r, m=m, d=d, speed=speed)
@@ -398,7 +437,8 @@ class World(object):
         pltPnts = ax.scatter(xl, yl, s=1)
 
         if simulate is None: return
-
+        for i in self.circles:
+            i.start() #TODO where do I add i.stop?
         def update(stepnum):
             self.update_world(t=time_step, energy_loss_fraction=energy_loss_fraction)
             xl, yl = [], []
