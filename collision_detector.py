@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 from math import sqrt, ceil, atan2
 import random
 import matplotlib.animation as animation
-
-
+from pynput import keyboard
+from time import time
 def quadratic_solver(a, b, c):
 
     ##Come back to this
@@ -276,6 +276,26 @@ class Cannon(Shape):
             # ready = 1
             # if time() - t >= 5:
             self.next_cannonball = True
+    def get_plot_points(self, numPoints=1000):
+        """
+        Given the amount of points to plot a circle, returns the x and y
+        positions of those points.
+
+        Inputs:
+            numPoints - the amount of points you want in the circle
+            (more points would mean a more fleshed out circle)
+            Default is 1000 points
+
+        Returns (xpoints, ypoints), the two of which are the lists of positions
+        of each point.
+        """
+        spacing = (2 * pi/(numPoints-1))   # 360 degrees is 2 * pi radians
+        thetapoints = [0 + i * spacing for i in range(numPoints)]
+
+        xpoints = [(cos(theta) * self.cannonball_radius) + self.x for theta in thetapoints]
+        ypoints = [(sin(theta) * self.cannonball_radius) + self.y for theta in thetapoints]
+
+        return xpoints, ypoints
 class ExplodingCircle(Circle):
     def __init__(self, x, y, r, world, m=1, d=0, speed=0, tbe=2, explosionr=5):
         super().__init__(x, y, r, m=m, d=d, speed=speed)
@@ -408,7 +428,7 @@ class World(object):
 
 
 
-    def plot(self, simulate=None, time_step=1e-3, energy_loss_fraction=0.5):
+    def plot(self, simulate=False, time_step=1e-3, energy_loss_fraction=0.5):
 
         """Plots all points and animates the circles if you wish it.
 
@@ -430,29 +450,42 @@ class World(object):
         ax.set_ylim(0, self.w) # Sets start and end points on plot y-axis to match the world
 
         xl, yl = [], []
-        for circle in self.circles:
+        shapelist = self.circles + self.cannons
+        for circle in shapelist:
             xp, yp = circle.get_plot_points()
             xl += xp
             yl += yp
         pltPnts = ax.scatter(xl, yl, s=1)
 
-        if simulate is None: return
-        for i in self.circles:
-            i.start() #TODO where do I add i.stop?
-        def update(stepnum):
+        if not simulate: return
+        def quitsim(key):
+            if key == keyboard.Key.esc:
+                simulate = False
+        simlistener = keyboard.Listener(on_press = quitsim)
+        simlistener.start()
+        for i in shapelist:
+            i.start()
+        while simulate:
+            currenttime = time()
             self.update_world(t=time_step, energy_loss_fraction=energy_loss_fraction)
             xl, yl = [], []
-            for circle in self.circles:
+            for circle in shapelist:
                 xp, yp = circle.get_plot_points()
                 xl += xp
                 yl += yp
             pltPnts.set_offsets(list(zip(xl, yl))) # Updates graph (pltPnt) to have new x and y values
-            return [pltPnts]
+            fig.canvas.draw_idle()
+            currenttime2 = time()
+            passedtime = currenttime2 - currentime
+            if time_step - passedtime < 0:
+                print(f"Make your time_step bigger than {passedtime}")
+                simulate = False
+            else:
+                plt.pause(time_step - passedtime)
 
-        anim = animation.FuncAnimation(fig, update, frames=ceil(simulate/time_step),
-                                       interval=time_step*1e3, blit=False, repeat=False)
-        return anim
-
+        for i in shapelist:
+            i.stop()
+        simlistener.stop()
     def find_collisions(self, circle_indices, collisions={}):
         # circles is a list of indices from self.circles
         # collisions is a dictionary that maps index pairs (i,j) to booleans
