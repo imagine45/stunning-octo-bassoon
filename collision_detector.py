@@ -210,11 +210,13 @@ class Circle(Shape):
 
 class Cannon(Shape):
     def __init__(self, x, y, orientation, world,
+		 cannon_length = 60,
                  cannonball_radius = 30,
                  cannonball_speed = 100,
                  tbe=2, explosionr=5):
         super().__init__(x,y,m=0,speed=0)
         self.orientation = orientation
+        self.cannon_length = cannon_length
         self.cannonball_radius = cannonball_radius
         self.cannonball_speed = cannonball_speed
         self.next_cannonball = False
@@ -240,7 +242,7 @@ class Cannon(Shape):
         self.orientiation += angle
 
     def start(self):
-        self.listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+        self.listener = keyboard.Listener(on_press=self.on_press, on_release=on_release)
         self.listener.start()
 
     def finish(self):
@@ -289,6 +291,25 @@ class Cannon(Shape):
         Returns (xpoints, ypoints), the two of which are the lists of positions
         of each point.
         """
+
+
+	# Left end of diameter: (x - R*cos(theta), y + R*sin(theta))
+	# Right end of diameter: (x + R*cos(theta), y - R*sin(theta))
+
+	# If starting point is (x0, y0), and every a across (in x) means b up (in y), and you need to go a distance of L, then
+	# endpoint can be (x0 + a*n, y0 + b*n), need to solve for n.
+	# L/sqrt(a^2 + b^2) = n ----> a = sin(theta), b = cos(theta) ---> n = L
+
+	# Cover all of our points on each line by plotting (x0 + a*k, y0 + b*k) for k = 0, 0.1, 0.2, ..., n-0.2, n-0.1, n
+	# To plot end of cannon, we move from left endpoint (x-R*cos(theta) + L*sin(theta), y + R*sin(theta) + L*cos(theta)) and
+	# each time, we add in a small step of size (k*2R*cos(theta), -k*2R*sin(theta)) with k going from 0 to 1 in small steps
+	
+	# Once we've drawn in the whole cannon, remember to make sure that cannonballs only show up at the right spot
+	# The right spot will just be (x + a*n, y + b*n) for (x,y) being the location of the cannon
+
+
+
+
         spacing = (2 * pi/(numPoints-1))   # 360 degrees is 2 * pi radians
         thetapoints = [0 + i * spacing for i in range(numPoints)]
 
