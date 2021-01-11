@@ -210,7 +210,7 @@ class Circle(Shape):
 
 class Cannon(Shape):
     def __init__(self, x, y, orientation, world,
-		 cannon_length = 60,
+		         cannon_length = 60,
                  cannonball_radius = 30,
                  cannonball_speed = 100,
                  tbe=2, explosionr=5):
@@ -303,12 +303,13 @@ class Cannon(Shape):
 	# Cover all of our points on each line by plotting (x0 + a*k, y0 + b*k) for k = 0, 0.1, 0.2, ..., n-0.2, n-0.1, n
 	# To plot end of cannon, we move from left endpoint (x-R*cos(theta) + L*sin(theta), y + R*sin(theta) + L*cos(theta)) and
 	# each time, we add in a small step of size (k*2R*cos(theta), -k*2R*sin(theta)) with k going from 0 to 1 in small steps
-	
-	# Once we've drawn in the whole cannon, remember to make sure that cannonballs only show up at the right spot
+
+	# TODO: make sure that cannonballs only show up at the right spot
 	# The right spot will just be (x + a*n, y + b*n) for (x,y) being the location of the cannon
 
 
-
+        R = self.cannonball_radius
+        # Ball Pivot at Base of Cannon
 
         spacing = (2 * pi/(numPoints-1))   # 360 degrees is 2 * pi radians
         thetapoints = [0 + i * spacing for i in range(numPoints)]
@@ -316,7 +317,42 @@ class Cannon(Shape):
         xpoints = [(cos(theta) * self.cannonball_radius) + self.x for theta in thetapoints]
         ypoints = [(sin(theta) * self.cannonball_radius) + self.y for theta in thetapoints]
 
+        # Actual base of cannon (diameter of ball pivot)
+
+        theta = self.orientation
+        spacing = 1/numPoints
+        steppoints = [i * spacing for i in range(numPoints)] # Points for Unit Line
+        scaledpoints = [2 * R * k for k in steppoints] # Points for scaled line
+
+        x0 = self.x - R * cos(theta)
+        y0 = self.y + R * sin(theta)
+        xpoints += [x0 + k * cos(theta) for k in scaledpoints]  # Shift and Rotate
+        ypoints += [y0 - k * sin(theta) for k in scaledpoints]  # Shift and Rotate
+
+        # End of cannon
+
+        x0 = self.x - R * cos(theta) + self.cannon_length*sin(theta)
+        y0 = self.y + R * sin(theta) + self.cannon_length*cos(theta)
+        xpoints += [x0 + k * cos(theta) for k in scaledpoints]
+        ypoints += [y0 - k * sin(theta) for k in scaledpoints]
+
+        # Left side of cannon
+
+        scaledpoints = [self.cannon_length * k for k in steppoints]
+        x0 = self.x - R * cos(theta)
+        y0 = self.y + R * sin(theta)
+        xpoints += [x0 + k * sin(theta) for k in scaledpoints]
+        ypoints += [y0 + k * cos(theta) for k in scaledpoints]
+
+        # Right side of cannon
+
+        x0 = self.x + R * cos(theta)
+        y0 = self.y - R * sin(theta)
+        xpoints += [x0 + k * sin(theta) for k in scaledpoints]
+        ypoints += [y0 + k * cos(theta) for k in scaledpoints]
+
         return xpoints, ypoints
+
 class ExplodingCircle(Circle):
     def __init__(self, x, y, r, world, m=1, d=0, speed=0, tbe=2, explosionr=5):
         super().__init__(x, y, r, m=m, d=d, speed=speed)
