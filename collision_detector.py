@@ -5,6 +5,9 @@ import random
 import matplotlib.animation as animation
 from pynput import keyboard
 from time import time
+
+import IPython
+
 def quadratic_solver(a, b, c):
 
     ##Come back to this
@@ -228,7 +231,9 @@ class Cannon(Shape):
     def update_position(self, t=0.1):
         if self.next_cannonball:
             #make a cannonball
-            circle1 = ExplodingCircle(self.x, self.y, self.cannonball_radius,
+            xmiddle = self.x + self.cannon_length*sin(self.orientation)
+            ymiddle = self.y + self.cannon_length*cos(self.orientation)
+            circle1 = ExplodingCircle(xmiddle, ymiddle, self.cannonball_radius,
                                       self.world, d=self.orientation,
                                       speed=self.cannonball_speed,
                                       tbe=self.tbe, explosionr=self.explosionr)
@@ -242,7 +247,7 @@ class Cannon(Shape):
         self.orientiation += angle
 
     def start(self):
-        self.listener = keyboard.Listener(on_press=self.on_press, on_release=on_release)
+        self.listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
         self.listener.start()
 
     def finish(self):
@@ -273,7 +278,7 @@ class Cannon(Shape):
                     self.orientation += 2
         except AttributeError:
             pass
-    def on_release(key):
+    def on_release(self, key):
         if key == keyboard.Key.space:
             # ready = 1
             # if time() - t >= 5:
@@ -363,7 +368,7 @@ class ExplodingCircle(Circle):
     def update_position(self, t=0.1):
         super().update_position(t=0.1)
         self.tbe -= t
-        if self.tbe <= 0:
+        if self.tbe <= 0 or self.world.is_colliding(self):
             self.world.track_explosion(self)
 
 
@@ -483,7 +488,13 @@ class World(object):
             if circle.check_collision(explosion):
                 self.exploded[i] = True
 
-
+    def is_colliding(self, circle):
+        for i, circ in enumerate(self.circles):
+            if circle is circ:
+                continue
+            elif circ.check_collision(circle):
+                return True
+        return False
 
     def plot(self, simulate=False, time_step=1e-3, energy_loss_fraction=0.5):
 
@@ -522,22 +533,32 @@ class World(object):
         simlistener.start()
         for i in shapelist:
             i.start()
+        count = 0
         while simulate:
+            print(count)
+            count += 1
             currenttime = time()
+            print("About to update World")
             self.update_world(t=time_step, energy_loss_fraction=energy_loss_fraction)
             xl, yl = [], []
+            print("About to plot everything")
             for circle in shapelist:
                 xp, yp = circle.get_plot_points()
                 xl += xp
                 yl += yp
             pltPnts.set_offsets(list(zip(xl, yl))) # Updates graph (pltPnt) to have new x and y values
             fig.canvas.draw_idle()
+            print("About to wait for plotting")
             currenttime2 = time()
-            passedtime = currenttime2 - currentime
+            print("Getting current time")
+            passedtime = currenttime2 - currenttime
+            print("Get time difference")
             if time_step - passedtime < 0:
                 print(f"Make your time_step bigger than {passedtime}")
                 simulate = False
             else:
+                print("Time difference is fine")
+                IPython.embed()
                 plt.pause(time_step - passedtime)
 
         for i in shapelist:
