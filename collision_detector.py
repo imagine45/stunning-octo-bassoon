@@ -8,17 +8,29 @@ from time import time
 
 import IPython
 
+# TODOs for Interactive Sims:
+# 1. Make cannon move faster - Done
+# 2. Make cannon movement directions right (up and down switched) - Done
+# 3. Make cannon angle align correctly (90 should mean pointing up, not pointing to the right)
+# 4. Make cannonball release come out in the right direction
+# 5. Make cannonball explosion better visually
+# 6. Make cannonballs explode cannons too
+
+
 def quadratic_solver(a, b, c):
 
     ##Come back to this
 
-    if a == 0: return -c/b
+    if a == 0:
+        return -c / b
 
     start = b / (2 * a)
-    rootsq = start**2 - c / a
+    rootsq = start ** 2 - c / a
 
-    if rootsq < 0: return ()
-    if rootsq == 0: return (-start,)
+    if rootsq < 0:
+        return ()
+    if rootsq == 0:
+        return (-start,)
 
     root = sqrt(rootsq)
     x1 = -start + root
@@ -33,11 +45,11 @@ def dot(v1, v2):
 def sqdistance(x1, y1, x2, y2):
     a = x1 - x2
     b = y1 - y2
-    return a**2 + b**2
+    return a ** 2 + b ** 2
 
 
 def cart_to_polar(vx, vy):
-    s = sqrt(vx**2 + vy**2)
+    s = sqrt(vx ** 2 + vy ** 2)
     d = atan2(vy, vx)
     return (s, d)
 
@@ -55,29 +67,38 @@ def rotate_vector(vx, vy, angle):
 
 
 class ReferenceFrame(object):
-
     def __init__(self, angle, *object_list, cm=True):
         self.object_list = object_list
         self.angle = angle
         self.x, self.y, self.vx, self.vy = 0, 0, 0, 0
 
-##cm = Center of Mass
+        ##cm = Center of Mass
 
         if cm:
-            m = sum(shape.m for shape in self.object_list) ##Adds the masses of all the objects
-            self.x = sum(shape.m * shape.x for shape in self.object_list)/m ##^^^ except it multiplies by x of each shape and divides by mass
-            self.y = sum(shape.m * shape.y for shape in self.object_list)/m ##^^^ but y
-            self.vx = sum(shape.m * shape.vx for shape in self.object_list)/m ##^^^ but with vx
-            self.vy = sum(shape.m * shape.vy for shape in self.object_list)/m ##^^^ but with vy
+            m = sum(
+                shape.m for shape in self.object_list
+            )  ##Adds the masses of all the objects
+            self.x = (
+                sum(shape.m * shape.x for shape in self.object_list) / m
+            )  ##^^^ except it multiplies by x of each shape and divides by mass
+            self.y = (
+                sum(shape.m * shape.y for shape in self.object_list) / m
+            )  ##^^^ but y
+            self.vx = (
+                sum(shape.m * shape.vx for shape in self.object_list) / m
+            )  ##^^^ but with vx
+            self.vy = (
+                sum(shape.m * shape.vy for shape in self.object_list) / m
+            )  ##^^^ but with vy
 
     def __enter__(self):
         for shape in self.object_list:
-            shape.x, shape.y = rotate_vector(shape.x - self.x,
-                                             shape.y - self.y,
-                                             self.angle)
-            shape.vx, shape.vy = rotate_vector(shape.vx - self.vx,
-                                               shape.vy - self.vy,
-                                               self.angle)
+            shape.x, shape.y = rotate_vector(
+                shape.x - self.x, shape.y - self.y, self.angle
+            )
+            shape.vx, shape.vy = rotate_vector(
+                shape.vx - self.vx, shape.vy - self.vy, self.angle
+            )
 
     def __exit__(self, type, value, traceback):
         for shape in self.object_list:
@@ -88,6 +109,7 @@ class ReferenceFrame(object):
             shape.vx, shape.vy = rotate_vector(shape.vx, shape.vy, -self.angle)
             shape.vx += self.vx
             shape.vy += self.vy
+
 
 class Shape(object):
     def __init__(self, x, y, m=1, d=0, speed=0):
@@ -112,11 +134,12 @@ class Shape(object):
     def get_plot_points(self, numPoints=1000):
         raise NotImplementedError
 
-    def start(self):
+    def on_press(self, key):
         pass
 
-    def finish(self):
+    def on_release(self, key):
         pass
+
 
 class Circle(Shape):
     def __init__(self, x, y, r, m=1, d=0, speed=0):
@@ -125,9 +148,9 @@ class Circle(Shape):
 
     def check_collision(self, otherCircle):
 
-##csq finds minimum sqdistance between two circles without colliding, dsq finds what the sqdistance is.
+        ##csq finds minimum sqdistance between two circles without colliding, dsq finds what the sqdistance is.
 
-        csq = (self.r + otherCircle.r)**2
+        csq = (self.r + otherCircle.r) ** 2
         dsq = sqdistance(self.x, self.y, otherCircle.x, otherCircle.y)
         return dsq <= csq
 
@@ -140,7 +163,7 @@ class Circle(Shape):
 
         with ReferenceFrame(-angle_to_rotate, c1, c2):
             if c1.vx > 0 and c2.vx < 0:
-                v_factor = energy_keep_fraction**0.5
+                v_factor = energy_keep_fraction ** 0.5
                 c1.vx *= -v_factor
                 c2.vx *= -v_factor
 
@@ -153,7 +176,7 @@ class Circle(Shape):
 
         Returns a boolean - True if point is in circle, False otherwise
         """
-        return (sqdistance(x, y, self.x, self.y) <= self.r**2)
+        return sqdistance(x, y, self.x, self.y) <= self.r ** 2
 
     def is_in_bin(self, bin):
         """
@@ -171,22 +194,23 @@ class Circle(Shape):
         xLow, xHigh = xPair
         yLow, yHigh = yPair
 
-        circlePoints = [(self.x, self.y),
-                        (self.x - self.r, self.y),
-                        (self.x + self.r, self.y),
-                        (self.x, self.y - self.r),
-                        (self.x, self.y + self.r)]
+        circlePoints = [
+            (self.x, self.y),
+            (self.x - self.r, self.y),
+            (self.x + self.r, self.y),
+            (self.x, self.y - self.r),
+            (self.x, self.y + self.r),
+        ]
 
         for x, y in circlePoints:
-            if xLow <= x <= xHigh and yLow <= y <= yHigh: return True
+            if xLow <= x <= xHigh and yLow <= y <= yHigh:
+                return True
 
-        cornerPoints = [(xLow, yLow),
-                        (xLow, yHigh),
-                        (xHigh, yLow),
-                        (xHigh, yHigh)]
+        cornerPoints = [(xLow, yLow), (xLow, yHigh), (xHigh, yLow), (xHigh, yHigh)]
 
         for x, y in cornerPoints:
-            if self.is_in_circle(x, y): return True
+            if self.is_in_circle(x, y):
+                return True
 
         return False
 
@@ -203,7 +227,7 @@ class Circle(Shape):
         Returns (xpoints, ypoints), the two of which are the lists of positions
         of each point.
         """
-        spacing = (2 * pi/(numPoints-1))   # 360 degrees is 2 * pi radians
+        spacing = 2 * pi / (numPoints - 1)  # 360 degrees is 2 * pi radians
         thetapoints = [0 + i * spacing for i in range(numPoints)]
 
         xpoints = [(cos(theta) * self.r) + self.x for theta in thetapoints]
@@ -211,13 +235,21 @@ class Circle(Shape):
 
         return xpoints, ypoints
 
+
 class Cannon(Shape):
-    def __init__(self, x, y, orientation, world,
-		         cannon_length = 60,
-                 cannonball_radius = 30,
-                 cannonball_speed = 100,
-                 tbe=2, explosionr=5):
-        super().__init__(x,y,m=0,speed=0)
+    def __init__(
+        self,
+        x,
+        y,
+        orientation,
+        world,
+        cannon_length=60,
+        cannonball_radius=30,
+        cannonball_speed=100,
+        tbe=2,
+        explosionr=5,
+    ):
+        super().__init__(x, y, m=0, speed=0)
         self.orientation = orientation
         self.cannon_length = cannon_length
         self.cannonball_radius = cannonball_radius
@@ -230,59 +262,61 @@ class Cannon(Shape):
 
     def update_position(self, t=0.1):
         if self.next_cannonball:
-            #make a cannonball
-            xmiddle = self.x + self.cannon_length*sin(self.orientation)
-            ymiddle = self.y + self.cannon_length*cos(self.orientation)
-            circle1 = ExplodingCircle(xmiddle, ymiddle, self.cannonball_radius,
-                                      self.world, d=self.orientation,
-                                      speed=self.cannonball_speed,
-                                      tbe=self.tbe, explosionr=self.explosionr)
-            #add cannonball  to the world
+            # make a cannonball
+            xmiddle = self.x + self.cannon_length * sin(
+                (self.orientation / 180) * pi
+            )  # TODO: Change radians everywhere to work with degrees instead
+            ymiddle = self.y + self.cannon_length * cos((self.orientation / 180) * pi)
+            circle1 = ExplodingCircle(
+                xmiddle,
+                ymiddle,
+                self.cannonball_radius,
+                self.world,
+                d=self.orientation,
+                speed=self.cannonball_speed,
+                tbe=self.tbe,
+                explosionr=self.explosionr,
+            )
+            # add cannonball  to the world
             self.world.circles.append(circle1)
             self.world.exploded.append(False)
             self.next_cannonball = False
 
-
     def change_orientation(self, angle):
         self.orientiation += angle
-
-    def start(self):
-        self.listener = keyboard.Listener(on_press=self.on_press, on_release=self.on_release)
-        self.listener.start()
-
-    def finish(self):
-        self.listener.stop()
 
     def on_press(self, key):
         # if key == keyboard.Key.space:
         #     if time() - t >= 5 and ready == 1:
-        #         print("Locked and loaded!")
+        #         # # print("Locked and loaded!")
         #         ready = 0
         #     elif ready == 1:
-        #         print("The cannon needs a break.")
+        #         # # print("The cannon needs a break.")
         #         ready = 0
         try:
             if key.char == "a":
-                self.x -= 1
+                self.x -= 5
             elif key.char == "d":
-                self.x += 1
+                self.x += 5
             if key.char == "w":
-                self.y -= 1
+                self.y += 5
             elif key.char == "s":
-                self.y += 1
+                self.y -= 5
             if self.orientation > 0:
                 if key.char == "q":
-                    self.orientation -= 2
+                    self.orientation -= 4
             if self.orientation < 180:
                 if key.char == "e":
-                    self.orientation += 2
+                    self.orientation += 4
         except AttributeError:
             pass
+
     def on_release(self, key):
         if key == keyboard.Key.space:
             # ready = 1
             # if time() - t >= 5:
             self.next_cannonball = True
+
     def get_plot_points(self, numPoints=1000):
         """
         Given the amount of points to plot a circle, returns the x and y
@@ -297,37 +331,39 @@ class Cannon(Shape):
         of each point.
         """
 
+        # Left end of diameter: (x - R*cos(theta), y + R*sin(theta))
+        # Right end of diameter: (x + R*cos(theta), y - R*sin(theta))
 
-	# Left end of diameter: (x - R*cos(theta), y + R*sin(theta))
-	# Right end of diameter: (x + R*cos(theta), y - R*sin(theta))
+        # If starting point is (x0, y0), and every a across (in x) means b up (in y), and you need to go a distance of L, then
+        # endpoint can be (x0 + a*n, y0 + b*n), need to solve for n.
+        # L/sqrt(a^2 + b^2) = n ----> a = sin(theta), b = cos(theta) ---> n = L
 
-	# If starting point is (x0, y0), and every a across (in x) means b up (in y), and you need to go a distance of L, then
-	# endpoint can be (x0 + a*n, y0 + b*n), need to solve for n.
-	# L/sqrt(a^2 + b^2) = n ----> a = sin(theta), b = cos(theta) ---> n = L
+        # Cover all of our points on each line by plotting (x0 + a*k, y0 + b*k) for k = 0, 0.1, 0.2, ..., n-0.2, n-0.1, n
+        # To plot end of cannon, we move from left endpoint (x-R*cos(theta) + L*sin(theta), y + R*sin(theta) + L*cos(theta)) and
+        # each time, we add in a small step of size (k*2R*cos(theta), -k*2R*sin(theta)) with k going from 0 to 1 in small steps
 
-	# Cover all of our points on each line by plotting (x0 + a*k, y0 + b*k) for k = 0, 0.1, 0.2, ..., n-0.2, n-0.1, n
-	# To plot end of cannon, we move from left endpoint (x-R*cos(theta) + L*sin(theta), y + R*sin(theta) + L*cos(theta)) and
-	# each time, we add in a small step of size (k*2R*cos(theta), -k*2R*sin(theta)) with k going from 0 to 1 in small steps
-
-	# TODO: make sure that cannonballs only show up at the right spot
-	# The right spot will just be (x + a*n, y + b*n) for (x,y) being the location of the cannon
-
+        # TODO: make sure that cannonballs only show up at the right spot
+        # The right spot will just be (x + a*n, y + b*n) for (x,y) being the location of the cannon
 
         R = self.cannonball_radius
         # Ball Pivot at Base of Cannon
 
-        spacing = (2 * pi/(numPoints-1))   # 360 degrees is 2 * pi radians
+        spacing = 2 * pi / (numPoints - 1)  # 360 degrees is 2 * pi radians
         thetapoints = [0 + i * spacing for i in range(numPoints)]
 
-        xpoints = [(cos(theta) * self.cannonball_radius) + self.x for theta in thetapoints]
-        ypoints = [(sin(theta) * self.cannonball_radius) + self.y for theta in thetapoints]
+        xpoints = [
+            (cos(theta) * self.cannonball_radius) + self.x for theta in thetapoints
+        ]
+        ypoints = [
+            (sin(theta) * self.cannonball_radius) + self.y for theta in thetapoints
+        ]
 
         # Actual base of cannon (diameter of ball pivot)
 
-        theta = self.orientation
-        spacing = 1/numPoints
-        steppoints = [i * spacing for i in range(numPoints)] # Points for Unit Line
-        scaledpoints = [2 * R * k for k in steppoints] # Points for scaled line
+        theta = (self.orientation / 180) * pi
+        spacing = 1 / numPoints
+        steppoints = [i * spacing for i in range(numPoints)]  # Points for Unit Line
+        scaledpoints = [2 * R * k for k in steppoints]  # Points for scaled line
 
         x0 = self.x - R * cos(theta)
         y0 = self.y + R * sin(theta)
@@ -336,8 +372,8 @@ class Cannon(Shape):
 
         # End of cannon
 
-        x0 = self.x - R * cos(theta) + self.cannon_length*sin(theta)
-        y0 = self.y + R * sin(theta) + self.cannon_length*cos(theta)
+        x0 = self.x - R * cos(theta) + self.cannon_length * sin(theta)
+        y0 = self.y + R * sin(theta) + self.cannon_length * cos(theta)
         xpoints += [x0 + k * cos(theta) for k in scaledpoints]
         ypoints += [y0 - k * sin(theta) for k in scaledpoints]
 
@@ -357,6 +393,7 @@ class Cannon(Shape):
         ypoints += [y0 + k * cos(theta) for k in scaledpoints]
 
         return xpoints, ypoints
+
 
 class ExplodingCircle(Circle):
     def __init__(self, x, y, r, world, m=1, d=0, speed=0, tbe=2, explosionr=5):
@@ -381,8 +418,9 @@ class World(object):
         self.gravity = [0, -gravity_strength if gravity else 0]
         self.cannons = []
 
-    def make_circle(self, moving=False, type="ring", exploding_radius = 5,
-                    exploding_time=None):
+    def make_circle(
+        self, moving=False, type="ring", exploding_radius=5, exploding_time=None
+    ):
         """Creates a circle that is not immediately colliding with the edge of
         the world or another circle in the world.
 
@@ -394,7 +432,7 @@ class World(object):
         """
         maxr = -1
         while maxr < 0:
-            x = random.uniform(0, self.l) # Center of circle
+            x = random.uniform(0, self.l)  # Center of circle
             y = random.uniform(0, self.w)
             maxr = min((self.l - x), (self.w - y), y, x)
             # picks the minimum distance from the edge of the world.
@@ -407,31 +445,43 @@ class World(object):
 
         r = random.uniform(0, maxr)
         if type == "ring":
-            m = 2*pi*r # m = mass
+            m = 2 * pi * r  # m = mass
         elif type == "disc":
-            m = pi*r**2
+            m = pi * r ** 2
         if moving:
-            speed = 5*random.uniform(0, sqrt(self.l**2 + self.w**2))
-            direction = random.uniform(0, 2*pi)
+            speed = 5 * random.uniform(0, sqrt(self.l ** 2 + self.w ** 2))
+            direction = random.uniform(0, 2 * pi)
         else:
             speed = 0
             direction = 0
         if exploding_time is None:
             return Circle(x, y, r, m=m, speed=speed, d=direction)
         else:
-            return ExplodingCircle(x, y, r, self,
-                                   m=m, d=direction, speed=speed,
-                                   tbe=exploding_time,
-                                   explosionr=exploding_radius)
+            return ExplodingCircle(
+                x,
+                y,
+                r,
+                self,
+                m=m,
+                d=direction,
+                speed=speed,
+                tbe=exploding_time,
+                explosionr=exploding_radius,
+            )
 
-    def add_circle(self, moving=False, type="ring", exploding_radius = 5,
-                   exploding_time=None):
+    def add_circle(
+        self, moving=False, type="ring", exploding_radius=5, exploding_time=None
+    ):
 
-        self.circles.append(self.make_circle(moving=moving, type=type,
-                                             exploding_radius=exploding_radius,
-                                             exploding_time=exploding_time))
+        self.circles.append(
+            self.make_circle(
+                moving=moving,
+                type=type,
+                exploding_radius=exploding_radius,
+                exploding_time=exploding_time,
+            )
+        )
         self.exploded.append(False)
-
 
     def populate(self, amountCircle, moving=False, type="ring"):
         """Creates an amount of new circles in the world to replace any old ones
@@ -440,7 +490,7 @@ class World(object):
             amountCircle - How many circles you want to make.
             moving - Do you want your circles to move? Default is False.
             type - "ring" or "disc". Ring is like an outline of a circle,
-             and a disc is a filled in one. Default is "ring". """
+             and a disc is a filled in one. Default is "ring"."""
         self.circles = []
         self.exploded = []
         for i in range(amountCircle):
@@ -462,25 +512,30 @@ class World(object):
             circle.update_position(t=t)
             circle.update_velocity(self.gravity[0], self.gravity[1], t=t)
 
-        self.circles = [circle for i, circle in enumerate(self.circles)
-                        if not self.exploded[i]]
+        self.circles = [
+            circle for i, circle in enumerate(self.circles) if not self.exploded[i]
+        ]
 
         self.exploded = [False for circle in self.circles]
 
         collisions = self.find_all_collisions()
         for i, j in collisions:
-            Circle.handle_collision(self.circles[i], self.circles[j],
-                                    energy_keep_fraction=1-energy_loss_fraction)
-        v_factor = (1-energy_loss_fraction)**0.5
+            Circle.handle_collision(
+                self.circles[i],
+                self.circles[j],
+                energy_keep_fraction=1 - energy_loss_fraction,
+            )
+        v_factor = (1 - energy_loss_fraction) ** 0.5
         for circle in self.circles:
-            if (circle.x < circle.r and circle.vx <= 0) or \
-               (circle.r + circle.x > self.l and circle.vx > 0):
+            if (circle.x < circle.r and circle.vx <= 0) or (
+                circle.r + circle.x > self.l and circle.vx > 0
+            ):
                 circle.vx *= -v_factor
-            if (circle.y < circle.r and circle.vy < 0) or \
-               (circle.r + circle.y > self.w and circle.vy > 0):
+            if (circle.y < circle.r and circle.vy < 0) or (
+                circle.r + circle.y > self.w and circle.vy > 0
+            ):
                 circle.update_velocity(self.gravity[0], -self.gravity[1], t=t)
                 circle.vy *= -v_factor
-
 
     def track_explosion(self, exploder):
         explosion = Circle(exploder.x, exploder.y, exploder.r + exploder.explosionr)
@@ -495,6 +550,22 @@ class World(object):
             elif circ.check_collision(circle):
                 return True
         return False
+
+    def on_press(self, key):
+        # If key is ESC, set simulate to False
+        # Otherwise, loop through each of the shapes and try their on_press function with this key
+        if key == keyboard.Key.esc:
+            self.simulate = False
+            return
+        shapelist = self.circles + self.cannons
+        for i in shapelist:
+            i.on_press(key)
+
+    def on_release(self, key):
+        # Loop through each of the shapes and try their on_release function with this key
+        shapelist = self.circles + self.cannons
+        for i in shapelist:
+            i.on_release(key)
 
     def plot(self, simulate=False, time_step=1e-3, energy_loss_fraction=0.5):
 
@@ -513,79 +584,80 @@ class World(object):
 
         """
 
-        fig, ax = plt.subplots() # Returns an overall figure object (contains all graphs you might make) and an axis object (just the one graph you actually care about)
-        ax.set_xlim(0, self.l) # Sets start and end points on plot x-axis to match the world
-        ax.set_ylim(0, self.w) # Sets start and end points on plot y-axis to match the world
+        self.simulate = simulate
+        (
+            fig,
+            ax,
+        ) = (
+            plt.subplots()
+        )  # Returns an overall figure object (contains all graphs you might make) and an axis object (just the one graph you actually care about)
+        ax.set_xlim(
+            0, self.l
+        )  # Sets start and end points on plot x-axis to match the world
+        ax.set_ylim(
+            0, self.w
+        )  # Sets start and end points on plot y-axis to match the world
 
         xl, yl = [], []
-        shapelist = self.circles + self.cannons
-        for circle in shapelist:
+        for circle in self.circles + self.cannons:
             xp, yp = circle.get_plot_points()
             xl += xp
             yl += yp
         pltPnts = ax.scatter(xl, yl, s=1)
 
-        if not simulate: return
-        def quitsim(key):
-            if key == keyboard.Key.esc:
-                simulate = False
-        simlistener = keyboard.Listener(on_press = quitsim)
+        if not self.simulate:
+            return
+
+        simlistener = keyboard.Listener(
+            on_press=self.on_press, on_release=self.on_release
+        )
         simlistener.start()
-        for i in shapelist:
-            i.start()
-        count = 0
-        while simulate:
-            print(count)
-            count += 1
+        while self.simulate:
+            print(len(self.circles))
             currenttime = time()
-            print("About to update World")
             self.update_world(t=time_step, energy_loss_fraction=energy_loss_fraction)
             xl, yl = [], []
-            print("About to plot everything")
-            for circle in shapelist:
+            for circle in self.circles + self.cannons:
                 xp, yp = circle.get_plot_points()
                 xl += xp
                 yl += yp
-            pltPnts.set_offsets(list(zip(xl, yl))) # Updates graph (pltPnt) to have new x and y values
+            pltPnts.set_offsets(
+                list(zip(xl, yl))
+            )  # Updates graph (pltPnt) to have new x and y values
             fig.canvas.draw_idle()
-            print("About to wait for plotting")
             currenttime2 = time()
-            print("Getting current time")
             passedtime = currenttime2 - currenttime
-            print("Get time difference")
             if time_step - passedtime < 0:
                 print(f"Make your time_step bigger than {passedtime}")
                 simulate = False
             else:
-                print("Time difference is fine")
-                IPython.embed()
                 plt.pause(time_step - passedtime)
 
-        for i in shapelist:
-            i.stop()
         simlistener.stop()
+
     def find_collisions(self, circle_indices, collisions={}):
         # circles is a list of indices from self.circles
         # collisions is a dictionary that maps index pairs (i,j) to booleans
         """Adding new entries to collision dictionary. Checks first to see if
-            what it's checking is already in the dictionary.
+        what it's checking is already in the dictionary.
 
-            Inputs:
+        Inputs:
 
-                circle_indices - A list of indices from self.circles to check
-                 collisions between specific circles.
-                collisions - A dictionary that maps index pairs (i,j) to
-                 booleans. Default is a blank dictionary.
+            circle_indices - A list of indices from self.circles to check
+             collisions between specific circles.
+            collisions - A dictionary that maps index pairs (i,j) to
+             booleans. Default is a blank dictionary.
 
-            Returns the new and improved collisions dictionary.
+        Returns the new and improved collisions dictionary.
 
-            MODIFIES THE ORIGINAL DICTIONARY"""
+        MODIFIES THE ORIGINAL DICTIONARY"""
         for i in circle_indices:
             for j in circle_indices:
-                if i >= j or ((i, j) in collisions): continue #Checks to see if
+                if i >= j or ((i, j) in collisions):
+                    continue  # Checks to see if
                 # comparisons have already been made, since you compare the
-                #lower indices to all the higher ones beforehand, you don't need
-                #to check again.
+                # lower indices to all the higher ones beforehand, you don't need
+                # to check again.
                 c = self.circles[i]
                 otherCircle = self.circles[j]
                 collisions[(i, j)] = c.check_collision(otherCircle)
@@ -595,22 +667,23 @@ class World(object):
     def split_world(self, xSteps, ySteps):
 
         """Splits the world into bins and figures out which circles are in which
-            bins.
+        bins.
 
-            Inputs:
-                xSteps - The amount of steps across the world horizontally. In
-                 other words, the number of bins on the x axis.
-                ySteps - The amount of steps across the world vertically. In
-                 other words, the number of bins on the y axis.
-            Returns a dictionary which contains the bins as keys and the circles
-             within them in a list as values."""
+        Inputs:
+            xSteps - The amount of steps across the world horizontally. In
+             other words, the number of bins on the x axis.
+            ySteps - The amount of steps across the world vertically. In
+             other words, the number of bins on the y axis.
+        Returns a dictionary which contains the bins as keys and the circles
+         within them in a list as values."""
 
-
-        xStepSize = self.l/xSteps
-        yStepSize = self.w/ySteps
-        xyBins = [((i*xStepSize, (i+1)*xStepSize),
-                   (j*yStepSize, (j+1)*yStepSize))
-                  for i in range(xSteps) for j in range(ySteps)]
+        xStepSize = self.l / xSteps
+        yStepSize = self.w / ySteps
+        xyBins = [
+            ((i * xStepSize, (i + 1) * xStepSize), (j * yStepSize, (j + 1) * yStepSize))
+            for i in range(xSteps)
+            for j in range(ySteps)
+        ]
         xyBins = {bin: [] for bin in xyBins}
         for i, circle in enumerate(self.circles):
             for bin, circleList in xyBins.items():
@@ -622,13 +695,13 @@ class World(object):
 
         """Finds every collision within every bin.
 
-            Inputs:
-                xSteps - The amount of steps across the world horizontally. In
-                 other words, the number of bins on the x axis.
-                ySteps - The amount of steps across the world vertically. In
-                 other words, the number of bins on the y axis.
+        Inputs:
+            xSteps - The amount of steps across the world horizontally. In
+             other words, the number of bins on the x axis.
+            ySteps - The amount of steps across the world vertically. In
+             other words, the number of bins on the y axis.
 
-            Returns every pair of circles that collided."""
+        Returns every pair of circles that collided."""
 
         xyBins = self.split_world(xSteps, ySteps)
         collisions = {}
