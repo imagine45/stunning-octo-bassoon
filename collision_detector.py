@@ -6,15 +6,21 @@ import matplotlib.animation as animation
 from pynput import keyboard
 from time import time
 
-import IPython
-
 # TODOs for Interactive Sims:
 # 1. Make cannon move faster - Done
 # 2. Make cannon movement directions right (up and down switched) - Done
 # 3. Make cannon angle align correctly (90 should mean pointing up, not pointing to the right)
-# 4. Make cannonball release come out in the right direction
+# Resolved: everything looks ok, we're gonna use 0 to mean pointing up
+# 4. Make cannonball release come out in the right direction - Done
 # 5. Make cannonball explosion better visually
-# 6. Make cannonballs explode cannons too
+# 6. Make cannonballs explode cannons too - Done
+# 7. Make sure cannonballs aren't explosive until they've fully left the cannon - Done
+# 8. Added a remote detonator for all the cannonballs from each cannon - Done
+# 9. Switch to pygame for graphics portion
+# 10. Add "ground" (immovable stuff that can blow up, piece by piece)
+# 11. Add a way to change which buttons control a cannon (from the constructor of the cannon)
+# 12. Random initialization of the ground (make geography at random)
+# 13. Get cannons up to enough speed to make this more than an aim and shoot game
 
 
 def quadratic_solver(a, b, c):
@@ -243,7 +249,7 @@ class Cannon(Shape):
         y,
         orientation,
         world,
-        cannon_length=60,
+        cannon_length=120,
         cannonball_radius=30,
         cannonball_speed=100,
         tbe=2,
@@ -258,9 +264,52 @@ class Cannon(Shape):
         self.tbe = tbe
         self.explosionr = explosionr
         self.world = world
+        self.key_is_pressed = {
+            "w": False,
+            "a": False,
+            "s": False,
+            "d": False,
+            "q": False,
+            "e": False,
+            "f": False,
+        }
+        self.our_cannonballs = []
+
         world.cannons.append(self)
+        world.exploded_cannons.append(False)
+
+    def check_collision(self, circle):
+
+        xpoints, ypoints = self.get_plot_points(with_end=False)
+        for i in range(len(xpoints)):
+            if circle.is_in_circle(xpoints[i], ypoints[i]):
+                return True
+        return False
 
     def update_position(self, t=0.1):
+
+        if self.key_is_pressed["a"]:
+            self.x -= t * 100
+        elif self.key_is_pressed["d"]:
+            self.x += t * 100
+        if self.key_is_pressed["w"]:
+            self.y += t * 100
+        elif self.key_is_pressed["s"]:
+            self.y -= t * 100
+        if self.orientation > -180:  # TODO: For tanks, this should be -90
+            if self.key_is_pressed["q"]:
+                self.orientation -= t * 60
+        if self.orientation < 180:  # TODO: For tanks, this should be 90
+            if self.key_is_pressed["e"]:
+                self.orientation += t * 60
+        if self.key_is_pressed["f"]:
+            for i in self.our_cannonballs:
+                i.tbe = 0
+
+        self.our_cannonballs = [
+            cannonball for cannonball in self.our_cannonballs if cannonball.tbe > 0
+        ]
+
         if self.next_cannonball:
             # make a cannonball
             xmiddle = self.x + self.cannon_length * sin(
@@ -272,14 +321,15 @@ class Cannon(Shape):
                 ymiddle,
                 self.cannonball_radius,
                 self.world,
-                d=self.orientation,
+                d=pi * (90 - self.orientation) / 180,
                 speed=self.cannonball_speed,
                 tbe=self.tbe,
                 explosionr=self.explosionr,
             )
+            self.our_cannonballs.append(circle1)
             # add cannonball  to the world
             self.world.circles.append(circle1)
-            self.world.exploded.append(False)
+            self.world.exploded_circles.append(False)
             self.next_cannonball = False
 
     def change_orientation(self, angle):
@@ -294,20 +344,8 @@ class Cannon(Shape):
         #         # # print("The cannon needs a break.")
         #         ready = 0
         try:
-            if key.char == "a":
-                self.x -= 5
-            elif key.char == "d":
-                self.x += 5
-            if key.char == "w":
-                self.y += 5
-            elif key.char == "s":
-                self.y -= 5
-            if self.orientation > 0:
-                if key.char == "q":
-                    self.orientation -= 4
-            if self.orientation < 180:
-                if key.char == "e":
-                    self.orientation += 4
+            if key.char in self.key_is_pressed:
+                self.key_is_pressed[key.char] = True
         except AttributeError:
             pass
 
@@ -316,8 +354,13 @@ class Cannon(Shape):
             # ready = 1
             # if time() - t >= 5:
             self.next_cannonball = True
+        try:
+            if key.char in self.key_is_pressed:
+                self.key_is_pressed[key.char] = False
+        except AttributeError:
+            pass
 
-    def get_plot_points(self, numPoints=1000):
+    def get_plot_points(self, numPoints=1000, with_end=True):
         """
         Given the amount of points to plot a circle, returns the x and y
         positions of those points.
@@ -371,11 +414,11 @@ class Cannon(Shape):
         ypoints += [y0 - k * sin(theta) for k in scaledpoints]  # Shift and Rotate
 
         # End of cannon
-
-        x0 = self.x - R * cos(theta) + self.cannon_length * sin(theta)
-        y0 = self.y + R * sin(theta) + self.cannon_length * cos(theta)
-        xpoints += [x0 + k * cos(theta) for k in scaledpoints]
-        ypoints += [y0 - k * sin(theta) for k in scaledpoints]
+        if with_end:
+            x0 = self.x - R * cos(theta) + self.cannon_length * sin(theta)
+            y0 = self.y + R * sin(theta) + self.cannon_length * cos(theta)
+            xpoints += [x0 + k * cos(theta) for k in scaledpoints]
+            ypoints += [y0 - k * sin(theta) for k in scaledpoints]
 
         # Left side of cannon
 
@@ -398,15 +441,19 @@ class Cannon(Shape):
 class ExplodingCircle(Circle):
     def __init__(self, x, y, r, world, m=1, d=0, speed=0, tbe=2, explosionr=5):
         super().__init__(x, y, r, m=m, d=d, speed=speed)
+        self.primetimer = 1
         self.tbe = tbe
         self.explosionr = explosionr
         self.world = world
 
     def update_position(self, t=0.1):
         super().update_position(t=0.1)
+        self.primetimer -= t
         self.tbe -= t
-        if self.tbe <= 0 or self.world.is_colliding(self):
-            self.world.track_explosion(self)
+        if self.primetimer <= 0:
+            if self.tbe <= 0 or self.world.is_colliding(self):
+                self.tbe = 0
+                self.world.track_explosion(self)
 
 
 class World(object):
@@ -417,6 +464,7 @@ class World(object):
         self.w = w
         self.gravity = [0, -gravity_strength if gravity else 0]
         self.cannons = []
+        self.exploded_cannons = []
 
     def make_circle(
         self, moving=False, type="ring", exploding_radius=5, exploding_time=None
@@ -481,7 +529,7 @@ class World(object):
                 exploding_time=exploding_time,
             )
         )
-        self.exploded.append(False)
+        self.exploded_circles.append(False)
 
     def populate(self, amountCircle, moving=False, type="ring"):
         """Creates an amount of new circles in the world to replace any old ones
@@ -492,7 +540,7 @@ class World(object):
             type - "ring" or "disc". Ring is like an outline of a circle,
              and a disc is a filled in one. Default is "ring"."""
         self.circles = []
-        self.exploded = []
+        self.exploded_circles = []
         for i in range(amountCircle):
             self.add_circle(moving=moving, type=type)
 
@@ -513,10 +561,18 @@ class World(object):
             circle.update_velocity(self.gravity[0], self.gravity[1], t=t)
 
         self.circles = [
-            circle for i, circle in enumerate(self.circles) if not self.exploded[i]
+            circle
+            for i, circle in enumerate(self.circles)
+            if not self.exploded_circles[i]
+        ]
+        self.cannons = [
+            cannon
+            for i, cannon in enumerate(self.cannons)
+            if not self.exploded_cannons[i]
         ]
 
-        self.exploded = [False for circle in self.circles]
+        self.exploded_circles = [False for circle in self.circles]
+        self.exploded_cannons = [False for circle in self.cannons]
 
         collisions = self.find_all_collisions()
         for i, j in collisions:
@@ -541,13 +597,16 @@ class World(object):
         explosion = Circle(exploder.x, exploder.y, exploder.r + exploder.explosionr)
         for i, circle in enumerate(self.circles):
             if circle.check_collision(explosion):
-                self.exploded[i] = True
+                self.exploded_circles[i] = True
+        for i, cannon in enumerate(self.cannons):
+            if cannon.check_collision(explosion):
+                self.exploded_cannons[i] = True
 
     def is_colliding(self, circle):
-        for i, circ in enumerate(self.circles):
-            if circle is circ:
+        for i, shape in enumerate(self.circles + self.cannons):
+            if circle is shape:
                 continue
-            elif circ.check_collision(circle):
+            elif shape.check_collision(circle):
                 return True
         return False
 
@@ -613,7 +672,6 @@ class World(object):
         )
         simlistener.start()
         while self.simulate:
-            print(len(self.circles))
             currenttime = time()
             self.update_world(t=time_step, energy_loss_fraction=energy_loss_fraction)
             xl, yl = [], []
